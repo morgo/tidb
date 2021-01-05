@@ -995,10 +995,22 @@ func (s *session) GetAllSysVars() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	ret := make(map[string]string, len(rows))
+	tblValues := make(map[string]string, len(rows))
 	for _, r := range rows {
 		k, v := r.GetString(0), r.GetString(1)
-		ret[k] = v
+		tblValues[k] = v
+	}
+	// The master list is variable.sysvars, not mysql.*, so if there are discrepencies
+	// variables will need to be patched in (with defaults) or excluded.
+	ret := make(map[string]string, len(rows))
+	for k, sv := range variable.GetSysVars() {
+		if sv.Scope&variable.ScopeGlobal == 1 || sv.Scope == variable.ScopeNone {
+			if _, ok := tblValues[k]; ok {
+				ret[k] = tblValues[k]
+			} else {
+				ret[k] = sv.Value
+			}
+		}
 	}
 	return ret, nil
 }
@@ -1012,16 +1024,18 @@ func (s *session) GetGlobalSysVar(name string) (string, error) {
 		// When running bootstrap or upgrade, we should not access global storage.
 		return "", nil
 	}
+	// Check the sysVar is still considered valid first.
+	sv := variable.GetSysVar(name)
+	if sv == nil {
+		return "", variable.ErrUnknownSystemVar.GenWithStackByArgs(name)
+	}
+
 	sql := fmt.Sprintf(`SELECT VARIABLE_VALUE FROM %s.%s WHERE VARIABLE_NAME="%s";`,
 		mysql.SystemDB, mysql.GlobalVariablesTable, name)
 	sysVar, err := s.getExecRet(s, sql)
 	if err != nil {
 		if executor.ErrResultIsEmpty.Equal(err) {
-			sv := variable.GetSysVar(name)
-			if sv != nil {
-				return sv.Value, nil
-			}
-			return "", variable.ErrUnknownSystemVar.GenWithStackByArgs(name)
+			return sv.Value, nil
 		}
 		return "", err
 	}

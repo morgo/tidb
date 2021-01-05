@@ -101,6 +101,8 @@ type SysVar struct {
 	Validation func(*SessionVars, string, string, ScopeFlag) (string, error)
 	// IsHintUpdatable indicate whether it's updatable via SET_VAR() hint (optional)
 	IsHintUpdatable bool
+	// GetSessionVar is a callback when getting the sessionVar value
+	GetSessionVar func(*SessionVars) (string, error)
 }
 
 // ValidateFromType provides automatic validation based on the SysVar's type
@@ -338,6 +340,14 @@ func RegisterSysVar(sv *SysVar) {
 	sysVarsLock.Unlock()
 }
 
+// UnregisterSysVar removes a sysvar from the SysVars list
+func UnregisterSysVar(name string) {
+	name = strings.ToLower(name)
+	sysVarsLock.Lock()
+	delete(sysVars, name)
+	sysVarsLock.Unlock()
+}
+
 // GetSysVar returns sys var info for name as key.
 func GetSysVar(name string) *SysVar {
 	name = strings.ToLower(name)
@@ -434,7 +444,7 @@ var defaultSysVars = []*SysVar{
 		}
 		return normalizedValue, ErrWrongValueForVar.GenWithStackByArgs(ForeignKeyChecks, originalValue)
 	}},
-	{Scope: ScopeNone, Name: Hostname, Value: ServerHostname},
+	{Scope: ScopeNone, Name: Hostname, Value: DefHostname},
 	{Scope: ScopeSession, Name: Timestamp, Value: ""},
 	{Scope: ScopeGlobal | ScopeSession, Name: CharacterSetFilesystem, Value: "binary", Validation: func(vars *SessionVars, normalizedValue string, originalValue string, scope ScopeFlag) (string, error) {
 		return checkCharacterValid(normalizedValue, CharacterSetFilesystem)
@@ -710,6 +720,8 @@ var defaultSysVars = []*SysVar{
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBAnalyzeVersion, Value: strconv.Itoa(DefTiDBAnalyzeVersion), Type: TypeInt, MinValue: 1, MaxValue: 2},
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBEnableIndexMergeJoin, Value: BoolToOnOff(DefTiDBEnableIndexMergeJoin), Type: TypeBool},
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBTrackAggregateMemoryUsage, Value: BoolToOnOff(DefTiDBTrackAggregateMemoryUsage), Type: TypeBool},
+	// Expose a read-only sysVar for if security-enanced mode is enabled.
+	{Scope: ScopeNone, Name: TiDBEnableEnhancedSecurity, Value: BoolToOnOff(config.GetGlobalConfig().EnableEnhancedSecurity), Type: TypeBool},
 }
 
 // SynonymsSysVariables is synonyms of system variables.
