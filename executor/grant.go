@@ -128,6 +128,10 @@ func (e *GrantExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		if !exists && e.ctx.GetSessionVars().SQLMode.HasNoAutoCreateUserMode() {
 			return ErrCantCreateUserWithGrant
 		} else if !exists {
+			// This code path only applies if mode NO_AUTO_CREATE_USER is unset.
+			// It is required for compatibility with 5.7 but removed from 8.0
+			// since it results in a massive security issue:
+			// spelling errors will create users with no passwords.
 			pwd, ok := user.EncodedPassword()
 			if !ok {
 				return errors.Trace(ErrPasswordFormat)
@@ -148,6 +152,9 @@ func (e *GrantExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		// DB scope:			mysql.DB
 		// Table scope:			mysql.Tables_priv
 		// Column scope:		mysql.Columns_priv
+
+		fmt.Printf("#### %#v\n", user)
+
 		if e.TLSOptions != nil {
 			err = checkAndInitGlobalPriv(internalSession, user.User.Username, user.User.Hostname)
 			if err != nil {
@@ -171,7 +178,7 @@ func (e *GrantExec) Next(ctx context.Context, req *chunk.Chunk) error {
 			privs = append(privs, &ast.PrivElem{Priv: mysql.GrantPriv})
 		}
 
-		// Grant global priv to user.
+		// Grant TLS privs to use in global table
 		err = e.grantGlobalPriv(internalSession, user)
 		if err != nil {
 			return err
@@ -410,10 +417,19 @@ func (e *GrantExec) grantLevelPriv(priv *ast.PrivElem, user *ast.UserSpec, inter
 	}
 }
 
+func (e *GrantExec) grantDynamicPriv(privName string, user *ast.UserSpec, internalSession sessionctx.Context) error {
+	sql := fmt.Sprintf(`REPLACE INTO %s.global_grants (user,host,priv) VALUES ('%s', '%s', '%s')`, mysql.SystemDB, user.User.Username, user.User.Hostname, privName)
+	_, err := internalSession.(sqlexec.SQLExecutor).Execute(context.Background(), sql)
+	return err
+}
+
 // grantGlobalLevel manipulates mysql.user table.
 func (e *GrantExec) grantGlobalLevel(priv *ast.PrivElem, user *ast.UserSpec, internalSession sessionctx.Context) error {
 	if priv.Priv == 0 {
 		return nil
+	}
+	if priv.Priv == mysql.ExtendedPriv {
+		return e.grantDynamicPriv(priv.Name, user, internalSession)
 	}
 	asgns, err := composeGlobalPrivUpdate(priv.Priv, "Y")
 	if err != nil {
@@ -491,7 +507,7 @@ func composeGlobalPrivUpdate(priv mysql.PrivilegeType, value string) (string, er
 	}
 	col, ok := mysql.Priv2UserCol[priv]
 	if !ok {
-		return "", errors.Errorf("Unknown priv: %v", priv)
+		return "", errors.Errorf("Unknown global priv: %v", priv)
 	}
 	return fmt.Sprintf(`%s='%s'`, col, value), nil
 }

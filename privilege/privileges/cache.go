@@ -288,6 +288,11 @@ func (p *MySQLPrivilege) LoadAll(ctx sessionctx.Context) error {
 		return errors.Trace(err)
 	}
 
+	err = p.LoadGlobalGrantsTable(ctx)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	err = p.LoadDBTable(ctx)
 	if err != nil {
 		if !noSuchTable(err) {
@@ -469,6 +474,11 @@ func (p MySQLPrivilege) SortUserTable() {
 // LoadGlobalPrivTable loads the mysql.global_priv table from database.
 func (p *MySQLPrivilege) LoadGlobalPrivTable(ctx sessionctx.Context) error {
 	return p.loadTable(ctx, "select HIGH_PRIORITY Host,User,Priv from mysql.global_priv", p.decodeGlobalPrivTableRow)
+}
+
+// LoadGlobalGrantsTable loads the mysql.global_priv table from database.
+func (p *MySQLPrivilege) LoadGlobalGrantsTable(ctx sessionctx.Context) error {
+	return p.loadTable(ctx, "select HIGH_PRIORITY Host,User,Priv from mysql.global_grants", p.decodeGlobalGrantsTableRow)
 }
 
 // LoadDBTable loads the mysql.db table from database.
@@ -654,6 +664,18 @@ func (p *MySQLPrivilege) decodeGlobalPrivTableRow(row chunk.Row, fs []*ast.Resul
 		p.Global = make(map[string][]globalPrivRecord)
 	}
 	p.Global[value.User] = append(p.Global[value.User], value)
+	return nil
+}
+
+func (p *MySQLPrivilege) decodeGlobalGrantsTableRow(row chunk.Row, fs []*ast.ResultField) error {
+
+	/*
+		if p.Global == nil {
+			p.Global = make(map[string][]globalPrivRecord)
+		}
+		p.Global[value.User] = append(p.Global[value.User], value)
+		return nil
+	*/
 	return nil
 }
 

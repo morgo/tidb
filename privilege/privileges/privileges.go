@@ -463,3 +463,18 @@ func (p *UserPrivileges) GetAllRoles(user, host string) []*auth.RoleIdentity {
 	mysqlPrivilege := p.Handle.Get()
 	return mysqlPrivilege.getAllRoles(user, host)
 }
+
+// IsDynamicPrivilege returns a bool
+func IsDynamicPrivilege(privName string) bool {
+	privName = strings.ToUpper(privName)
+	switch privName {
+	case "BACKUP_ADMIN", "SYSTEM_VARIABLES_ADMIN", "ROLE_ADMIN", "RESTRICTED_SYSTEM_VARIABLES_ADMIN", "RESTRICTED_CONNECTION_ADMIN":
+		return true
+	}
+	return false
+}
+
+// GetDynamicPrivileges returns the list of dynamic privs. Required for GRANT ALL.
+func GetDynamicPrivileges() []string {
+	return []string{"BACKUP_ADMIN", "SYSTEM_VARIABLES_ADMIN", "ROLE_ADMIN", "RESTRICTED_SYSTEM_VARIABLES_ADMIN", "RESTRICTED_CONNECTION_ADMIN"}
+}

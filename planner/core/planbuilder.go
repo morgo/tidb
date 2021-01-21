@@ -60,6 +60,7 @@ import (
 
 type visitInfo struct {
 	privilege     mysql.PrivilegeType
+	dynamicPriv   string
 	db            string
 	table         string
 	column        string
@@ -2298,6 +2299,15 @@ func collectVisitInfoFromGrantStmt(sctx sessionctx.Context, vi []visitInfo, stmt
 
 	var allPrivs []mysql.PrivilegeType
 	for _, item := range stmt.Privs {
+
+		if item.Priv == mysql.ExtendedPriv {
+			fmt.Printf("### Attempting to set DYNAMIC privilege: %s\n", item.Name)
+			// TODO: check that the grant is to *.* otherwise it is an error with DYNAMIC privs.
+			// May need to validate this at the parser.
+			vi = appendDynamicVisitInfo(vi, item.Name, nil)
+			continue
+		}
+
 		if item.Priv == mysql.AllPriv {
 			switch stmt.Level.Level {
 			case ast.GrantLevelGlobal:
@@ -2309,7 +2319,7 @@ func collectVisitInfoFromGrantStmt(sctx sessionctx.Context, vi []visitInfo, stmt
 			}
 			break
 		}
-		vi = appendVisitInfo(vi, item.Priv, dbName, tableName, "", nil)
+		vi = appendVisitInfo(vi, item.Priv, dbName, tableName, "", nil) // this appends the mysql.ExtendedPriv priv requirement, which makes no sense.
 	}
 
 	for _, priv := range allPrivs {
