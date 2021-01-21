@@ -96,6 +96,13 @@ type globalPrivRecord struct {
 	Broken bool
 }
 
+type dynamicPrivRecord struct {
+	baseRecord
+
+	PrivilegeName string
+	GrantOption   bool
+}
+
 // SSLType is enum value for GlobalPrivValue.SSLType.
 // the value is compatible with MySQL storage json value.
 type SSLType int
@@ -230,6 +237,7 @@ type MySQLPrivilege struct {
 	User          []UserRecord
 	UserMap       map[string][]UserRecord // Accelerate User searching
 	Global        map[string][]globalPrivRecord
+	Dynamic       map[string][]dynamicPrivRecord
 	DB            []dbRecord
 	DBMap         map[string][]dbRecord // Accelerate DB searching
 	TablesPriv    []tablesPrivRecord
@@ -668,14 +676,18 @@ func (p *MySQLPrivilege) decodeGlobalPrivTableRow(row chunk.Row, fs []*ast.Resul
 }
 
 func (p *MySQLPrivilege) decodeGlobalGrantsTableRow(row chunk.Row, fs []*ast.ResultField) error {
-
-	/*
-		if p.Global == nil {
-			p.Global = make(map[string][]globalPrivRecord)
+	var value dynamicPrivRecord
+	for i, f := range fs {
+		switch {
+		case f.ColumnAsName.L == "priv":
+			value.PrivilegeName = row.GetString(i)
 		}
-		p.Global[value.User] = append(p.Global[value.User], value)
-		return nil
-	*/
+	}
+
+	if p.Dynamic == nil {
+		p.Dynamic = make(map[string][]dynamicPrivRecord)
+	}
+	p.Dynamic[value.User] = append(p.Dynamic[value.User], value)
 	return nil
 }
 
