@@ -44,6 +44,19 @@ type UserPrivileges struct {
 	*Handle
 }
 
+// RequestDynamicVerification implements the Manager interface.
+func (p *UserPrivileges) RequestDynamicVerification(activeRoles []*auth.RoleIdentity, privName string, grantable bool) bool {
+	if SkipWithGrant {
+		return true
+	}
+	if p.user == "" && p.host == "" {
+		return true
+	}
+
+	mysqlPriv := p.Handle.Get()
+	return mysqlPriv.RequestDynamicVerification(activeRoles, p.user, p.host, privName, grantable)
+}
+
 // RequestVerification implements the Manager interface.
 func (p *UserPrivileges) RequestVerification(activeRoles []*auth.RoleIdentity, db, table, column string, priv mysql.PrivilegeType) bool {
 	if SkipWithGrant {
@@ -465,16 +478,10 @@ func (p *UserPrivileges) GetAllRoles(user, host string) []*auth.RoleIdentity {
 }
 
 // IsDynamicPrivilege returns a bool
-func IsDynamicPrivilege(privName string) bool {
-	privName = strings.ToUpper(privName)
-	switch privName {
-	case "BACKUP_ADMIN", "SYSTEM_VARIABLES_ADMIN", "ROLE_ADMIN", "RESTRICTED_SYSTEM_VARIABLES_ADMIN", "RESTRICTED_CONNECTION_ADMIN":
+func IsDynamicPrivilege(privNameInUpper string) bool {
+	switch privNameInUpper {
+	case "BACKUP_ADMIN", "SYSTEM_VARIABLES_ADMIN", "ROLE_ADMIN", "CONNECTION_ADMIN":
 		return true
 	}
 	return false
-}
-
-// GetDynamicPrivileges returns the list of dynamic privs. Required for GRANT ALL.
-func GetDynamicPrivileges() []string {
-	return []string{"BACKUP_ADMIN", "SYSTEM_VARIABLES_ADMIN", "ROLE_ADMIN", "RESTRICTED_SYSTEM_VARIABLES_ADMIN", "RESTRICTED_CONNECTION_ADMIN"}
 }

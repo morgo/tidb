@@ -899,6 +899,9 @@ var MySQLErrName = map[uint16]*mysql.ErrMessage{
 	ErrFunctionalIndexDataIsTooLong:                          mysql.Message("Data too long for expression index '%s'", nil),
 	ErrFunctionalIndexNotApplicable:                          mysql.Message("Cannot use expression index '%s' due to type or collation conversion", nil),
 	ErrUnsupportedConstraintCheck:                            mysql.Message("%s is not supported", nil),
+	ErrDynamicPrivilegeNotRegistered:                         mysql.Message("Dynamic privilege '%s' is not registered with the server.", nil),
+	ErrIllegalPrivilegeLevel:                                 mysql.Message("Illegal privilege level specified for %s", nil),
+
 	// MariaDB errors.
 	ErrOnlyOneDefaultPartionAllowed:         mysql.Message("Only one DEFAULT partition allowed", nil),
 	ErrWrongPartitionTypeExpectedSystemTime: mysql.Message("Wrong partitioning type, expected type: `SYSTEM_TIME`", nil),
@@ -1034,8 +1037,9 @@ var MySQLErrName = map[uint16]*mysql.ErrMessage{
 
 	ErrJSONObjectKeyTooLong: mysql.Message("TiDB does not yet support JSON objects with the key length >= 65536", nil),
 
-	ErrInvalidPlacementSpec: mysql.Message("Invalid placement policy '%s': %s", nil),
-	ErrPlacementPolicyCheck: mysql.Message("Placement policy didn't meet the constraint, reason: %s", nil),
+	ErrInvalidPlacementSpec:   mysql.Message("Invalid placement policy '%s': %s", nil),
+	ErrPlacementPolicyCheck:   mysql.Message("Placement policy didn't meet the constraint, reason: %s", nil),
+	ErrMultiStatementDisabled: mysql.Message("client has multi-statement capability disabled. Run SET GLOBAL tidb_multi_statement_mode='ON' after you understand the security risk", nil),
 
 	// TiKV/PD errors.
 	ErrPDServerTimeout:           mysql.Message("PD server timeout", nil),

@@ -46,6 +46,10 @@ type Manager interface {
 	// RequestVerificationWithUser verifies specific user privilege for the request.
 	RequestVerificationWithUser(db, table, column string, priv mysql.PrivilegeType, user *auth.UserIdentity) bool
 
+	// RequestDynamicVerification verifies user privilege for a DYNAMIC privilege.
+	// Dynamic privileges are only assignable globally, and have their own grantable attribute.
+	RequestDynamicVerification(activeRoles []*auth.RoleIdentity, privName string, grantable bool) bool
+
 	// ConnectionVerification verifies user privilege for connection.
 	ConnectionVerification(user, host string, auth, salt []byte, tlsState *tls.ConnectionState) (string, string, bool)
 

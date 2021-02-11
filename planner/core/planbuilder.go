@@ -59,13 +59,14 @@ import (
 )
 
 type visitInfo struct {
-	privilege     mysql.PrivilegeType
-	dynamicPriv   string
-	db            string
-	table         string
-	column        string
-	err           error
-	alterWritable bool
+	privilege        mysql.PrivilegeType
+	dynamicPriv      string
+	dynamicWithGrant bool
+	db               string
+	table            string
+	column           string
+	err              error
+	alterWritable    bool
 }
 
 type indexNestedLoopJoinTables struct {
@@ -720,8 +721,8 @@ func (b *PlanBuilder) buildSet(ctx context.Context, v *ast.SetStmt) (Plan, error
 	p := &Set{}
 	for _, vars := range v.Variables {
 		if vars.IsGlobal {
-			err := ErrSpecificAccessDenied.GenWithStackByArgs("SUPER")
-			b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SuperPriv, "", "", "", err)
+			err := ErrSpecificAccessDenied.GenWithStackByArgs("SUPER or SYSTEM_VARIABLES_ADMIN")
+			b.visitInfo = appendDynamicVisitInfo(b.visitInfo, "SYSTEM_VARIABLES_ADMIN", false, err)
 		}
 		assign := &expression.VarAssignment{
 			Name:     vars.Name,
@@ -1676,7 +1677,7 @@ func getPhysicalIDsAndPartitionNames(tblInfo *model.TableInfo, partitionNames []
 	return ids, names, nil
 }
 
-func (b *PlanBuilder) buildAnalyzeTable(as *ast.AnalyzeTableStmt, opts map[ast.AnalyzeOptionType]uint64) (Plan, error) {
+func (b *PlanBuilder) buildAnalyzeTable(as *ast.AnalyzeTableStmt, opts map[ast.AnalyzeOptionType]uint64, version int) (Plan, error) {
 	p := &Analyze{Opts: opts}
 	pruneMode := variable.PartitionPruneMode(b.ctx.GetSessionVars().PartitionPruneMode.Load())
 	if len(as.PartitionNames) > 0 && pruneMode == variable.DynamicOnly {
@@ -1696,20 +1697,18 @@ func (b *PlanBuilder) buildAnalyzeTable(as *ast.AnalyzeTableStmt, opts map[ast.A
 			return nil, err
 		}
 		for _, idx := range idxInfo {
-			if pruneMode == variable.StaticOnly || (pruneMode == variable.StaticButPrepareDynamic && !b.ctx.GetSessionVars().InRestrictedSQL) {
-				// static mode or static-but-prepare-dynamic mode not belong auto analyze need analyze each partition
-				// for static-but-prepare-dynamic mode with auto analyze, echo partition will be check before analyze partition.
-				for i, id := range physicalIDs {
-					info := analyzeInfo{DBName: tbl.Schema.O, TableName: tbl.Name.O, PartitionName: names[i], TableID: AnalyzeTableID{PersistID: id, CollectIDs: []int64{id}}, Incremental: as.Incremental}
-					p.IdxTasks = append(p.IdxTasks, AnalyzeIndexTask{
-						IndexInfo:   idx,
-						analyzeInfo: info,
-						TblInfo:     tbl.TableInfo,
-					})
+			for i, id := range physicalIDs {
+				if id == tbl.TableInfo.ID {
+					id = -1
 				}
-			}
-			if pruneMode == variable.DynamicOnly || pruneMode == variable.StaticButPrepareDynamic {
-				info := analyzeInfo{DBName: tbl.Schema.O, TableName: tbl.Name.O, TableID: AnalyzeTableID{PersistID: tbl.TableInfo.ID, CollectIDs: physicalIDs}, Incremental: as.Incremental}
+				info := analyzeInfo{
+					DBName:        tbl.Schema.O,
+					TableName:     tbl.Name.O,
+					PartitionName: names[i],
+					TableID:       AnalyzeTableID{TableID: tbl.TableInfo.ID, PartitionID: id},
+					Incremental:   as.Incremental,
+					StatsVersion:  version,
+				}
 				p.IdxTasks = append(p.IdxTasks, AnalyzeIndexTask{
 					IndexInfo:   idx,
 					analyzeInfo: info,
@@ -1719,19 +1718,18 @@ func (b *PlanBuilder) buildAnalyzeTable(as *ast.AnalyzeTableStmt, opts map[ast.A
 		}
 		handleCols := BuildHandleColsForAnalyze(b.ctx, tbl.TableInfo)
 		if len(colInfo) > 0 || handleCols != nil {
-			if pruneMode == variable.StaticOnly || pruneMode == variable.StaticButPrepareDynamic {
-				for i, id := range physicalIDs {
-					info := analyzeInfo{DBName: tbl.Schema.O, TableName: tbl.Name.O, PartitionName: names[i], TableID: AnalyzeTableID{PersistID: id, CollectIDs: []int64{id}}, Incremental: as.Incremental}
-					p.ColTasks = append(p.ColTasks, AnalyzeColumnsTask{
-						HandleCols:  handleCols,
-						ColsInfo:    colInfo,
-						analyzeInfo: info,
-						TblInfo:     tbl.TableInfo,
-					})
+			for i, id := range physicalIDs {
+				if id == tbl.TableInfo.ID {
+					id = -1
 				}
-			}
-			if pruneMode == variable.DynamicOnly || pruneMode == variable.StaticButPrepareDynamic {
-				info := analyzeInfo{DBName: tbl.Schema.O, TableName: tbl.Name.O, TableID: AnalyzeTableID{PersistID: tbl.TableInfo.ID, CollectIDs: physicalIDs}, Incremental: as.Incremental}
+				info := analyzeInfo{
+					DBName:        tbl.Schema.O,
+					TableName:     tbl.Name.O,
+					PartitionName: names[i],
+					TableID:       AnalyzeTableID{TableID: tbl.TableInfo.ID, PartitionID: id},
+					Incremental:   as.Incremental,
+					StatsVersion:  version,
+				}
 				p.ColTasks = append(p.ColTasks, AnalyzeColumnsTask{
 					HandleCols:  handleCols,
 					ColsInfo:    colInfo,
@@ -1744,7 +1742,7 @@ func (b *PlanBuilder) buildAnalyzeTable(as *ast.AnalyzeTableStmt, opts map[ast.A
 	return p, nil
 }
 
-func (b *PlanBuilder) buildAnalyzeIndex(as *ast.AnalyzeTableStmt, opts map[ast.AnalyzeOptionType]uint64) (Plan, error) {
+func (b *PlanBuilder) buildAnalyzeIndex(as *ast.AnalyzeTableStmt, opts map[ast.AnalyzeOptionType]uint64, version int) (Plan, error) {
 	p := &Analyze{Opts: opts}
 	tblInfo := as.TableNames[0].TableInfo
 	pruneMode := variable.PartitionPruneMode(b.ctx.GetSessionVars().PartitionPruneMode.Load())
@@ -1756,18 +1754,32 @@ func (b *PlanBuilder) buildAnalyzeIndex(as *ast.AnalyzeTableStmt, opts map[ast.A
 	if err != nil {
 		return nil, err
 	}
+	statsHandle := domain.GetDomain(b.ctx).StatsHandle()
+	if statsHandle == nil {
+		return nil, errors.Errorf("statistics hasn't been initialized, please try again later")
+	}
+	versionIsSame := statsHandle.CheckAnalyzeVersion(tblInfo, physicalIDs, &version)
+	if !versionIsSame {
+		if b.ctx.GetSessionVars().EnableFastAnalyze {
+			return nil, errors.Errorf("Fast analyze hasn't reached General Availability and only support analyze version 1 currently. But the existing statistics of the table is not version 1.")
+		}
+		b.ctx.GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("The analyze version from the session is not compatible with the existing statistics of the table. Use the existing version instead"))
+	}
 	for _, idxName := range as.IndexNames {
 		if isPrimaryIndex(idxName) {
 			handleCols := BuildHandleColsForAnalyze(b.ctx, tblInfo)
 			if handleCols != nil {
-				if pruneMode == variable.StaticOnly || pruneMode == variable.StaticButPrepareDynamic {
-					for i, id := range physicalIDs {
-						info := analyzeInfo{DBName: as.TableNames[0].Schema.O, TableName: as.TableNames[0].Name.O, PartitionName: names[i], TableID: AnalyzeTableID{PersistID: id, CollectIDs: []int64{id}}, Incremental: as.Incremental}
-						p.ColTasks = append(p.ColTasks, AnalyzeColumnsTask{HandleCols: handleCols, analyzeInfo: info, TblInfo: tblInfo})
+				for i, id := range physicalIDs {
+					if id == tblInfo.ID {
+						id = -1
 					}
-				}
-				if pruneMode == variable.DynamicOnly || pruneMode == variable.StaticButPrepareDynamic {
-					info := analyzeInfo{DBName: as.TableNames[0].Schema.O, TableName: as.TableNames[0].Name.O, TableID: AnalyzeTableID{PersistID: tblInfo.ID, CollectIDs: physicalIDs}, Incremental: as.Incremental}
+					info := analyzeInfo{
+						DBName:        as.TableNames[0].Schema.O,
+						TableName:     as.TableNames[0].Name.O,
+						PartitionName: names[i], TableID: AnalyzeTableID{TableID: tblInfo.ID, PartitionID: id},
+						Incremental:  as.Incremental,
+						StatsVersion: version,
+					}
 					p.ColTasks = append(p.ColTasks, AnalyzeColumnsTask{HandleCols: handleCols, analyzeInfo: info, TblInfo: tblInfo})
 				}
 				continue
@@ -1777,21 +1789,25 @@ func (b *PlanBuilder) buildAnalyzeIndex(as *ast.AnalyzeTableStmt, opts map[ast.A
 		if idx == nil || idx.State != model.StatePublic {
 			return nil, ErrAnalyzeMissIndex.GenWithStackByArgs(idxName.O, tblInfo.Name.O)
 		}
-		if pruneMode == variable.StaticOnly || pruneMode == variable.StaticButPrepareDynamic {
-			for i, id := range physicalIDs {
-				info := analyzeInfo{DBName: as.TableNames[0].Schema.O, TableName: as.TableNames[0].Name.O, PartitionName: names[i], TableID: AnalyzeTableID{PersistID: id, CollectIDs: []int64{id}}, Incremental: as.Incremental}
-				p.IdxTasks = append(p.IdxTasks, AnalyzeIndexTask{IndexInfo: idx, analyzeInfo: info, TblInfo: tblInfo})
+		for i, id := range physicalIDs {
+			if id == tblInfo.ID {
+				id = -1
 			}
-		}
-		if pruneMode == variable.DynamicOnly || pruneMode == variable.StaticButPrepareDynamic {
-			info := analyzeInfo{DBName: as.TableNames[0].Schema.O, TableName: as.TableNames[0].Name.O, TableID: AnalyzeTableID{PersistID: tblInfo.ID, CollectIDs: physicalIDs}, Incremental: as.Incremental}
+			info := analyzeInfo{
+				DBName:        as.TableNames[0].Schema.O,
+				TableName:     as.TableNames[0].Name.O,
+				PartitionName: names[i],
+				TableID:       AnalyzeTableID{TableID: tblInfo.ID, PartitionID: id},
+				Incremental:   as.Incremental,
+				StatsVersion:  version,
+			}
 			p.IdxTasks = append(p.IdxTasks, AnalyzeIndexTask{IndexInfo: idx, analyzeInfo: info, TblInfo: tblInfo})
 		}
 	}
 	return p, nil
 }
 
-func (b *PlanBuilder) buildAnalyzeAllIndex(as *ast.AnalyzeTableStmt, opts map[ast.AnalyzeOptionType]uint64) (Plan, error) {
+func (b *PlanBuilder) buildAnalyzeAllIndex(as *ast.AnalyzeTableStmt, opts map[ast.AnalyzeOptionType]uint64, version int) (Plan, error) {
 	p := &Analyze{Opts: opts}
 	tblInfo := as.TableNames[0].TableInfo
 	pruneMode := variable.PartitionPruneMode(b.ctx.GetSessionVars().PartitionPruneMode.Load())
@@ -1803,30 +1819,49 @@ func (b *PlanBuilder) buildAnalyzeAllIndex(as *ast.AnalyzeTableStmt, opts map[as
 	if err != nil {
 		return nil, err
 	}
+	statsHandle := domain.GetDomain(b.ctx).StatsHandle()
+	if statsHandle == nil {
+		return nil, errors.Errorf("statistics hasn't been initialized, please try again later")
+	}
+	versionIsSame := statsHandle.CheckAnalyzeVersion(tblInfo, physicalIDs, &version)
+	if !versionIsSame {
+		if b.ctx.GetSessionVars().EnableFastAnalyze {
+			return nil, errors.Errorf("Fast analyze hasn't reached General Availability and only support analyze version 1 currently. But the existing statistics of the table is not version 1.")
+		}
+		b.ctx.GetSessionVars().StmtCtx.AppendWarning(errors.Errorf("The analyze version from the session is not compatible with the existing statistics of the table. Use the existing version instead"))
+	}
 	for _, idx := range tblInfo.Indices {
 		if idx.State == model.StatePublic {
-			if pruneMode == variable.StaticOnly || pruneMode == variable.StaticButPrepareDynamic {
-				for i, id := range physicalIDs {
-					info := analyzeInfo{DBName: as.TableNames[0].Schema.O, TableName: as.TableNames[0].Name.O, PartitionName: names[i], TableID: AnalyzeTableID{PersistID: id, CollectIDs: []int64{id}}, Incremental: as.Incremental}
-					p.IdxTasks = append(p.IdxTasks, AnalyzeIndexTask{IndexInfo: idx, analyzeInfo: info, TblInfo: tblInfo})
+			for i, id := range physicalIDs {
+				if id == tblInfo.ID {
+					id = -1
 				}
-			}
-			if pruneMode == variable.DynamicOnly || pruneMode == variable.StaticButPrepareDynamic {
-				info := analyzeInfo{DBName: as.TableNames[0].Schema.O, TableName: as.TableNames[0].Name.O, TableID: AnalyzeTableID{PersistID: tblInfo.ID, CollectIDs: physicalIDs}, Incremental: as.Incremental}
+				info := analyzeInfo{
+					DBName:        as.TableNames[0].Schema.O,
+					TableName:     as.TableNames[0].Name.O,
+					PartitionName: names[i],
+					TableID:       AnalyzeTableID{TableID: tblInfo.ID, PartitionID: id},
+					Incremental:   as.Incremental,
+					StatsVersion:  version,
+				}
 				p.IdxTasks = append(p.IdxTasks, AnalyzeIndexTask{IndexInfo: idx, analyzeInfo: info, TblInfo: tblInfo})
 			}
 		}
 	}
 	handleCols := BuildHandleColsForAnalyze(b.ctx, tblInfo)
 	if handleCols != nil {
-		if pruneMode == variable.StaticOnly || pruneMode == variable.StaticButPrepareDynamic {
-			for i, id := range physicalIDs {
-				info := analyzeInfo{DBName: as.TableNames[0].Schema.O, TableName: as.TableNames[0].Name.O, PartitionName: names[i], TableID: AnalyzeTableID{PersistID: id, CollectIDs: []int64{id}}, Incremental: as.Incremental}
-				p.ColTasks = append(p.ColTasks, AnalyzeColumnsTask{HandleCols: handleCols, analyzeInfo: info, TblInfo: tblInfo})
+		for i, id := range physicalIDs {
+			if id == tblInfo.ID {
+				id = -1
 			}
-		}
-		if pruneMode == variable.DynamicOnly || pruneMode == variable.StaticButPrepareDynamic {
-			info := analyzeInfo{DBName: as.TableNames[0].Schema.O, TableName: as.TableNames[0].Name.O, TableID: AnalyzeTableID{PersistID: tblInfo.ID, CollectIDs: physicalIDs}, Incremental: as.Incremental}
+			info := analyzeInfo{
+				DBName:        as.TableNames[0].Schema.O,
+				TableName:     as.TableNames[0].Name.O,
+				PartitionName: names[i],
+				TableID:       AnalyzeTableID{TableID: tblInfo.ID, PartitionID: id},
+				Incremental:   as.Incremental,
+				StatsVersion:  version,
+			}
 			p.ColTasks = append(p.ColTasks, AnalyzeColumnsTask{HandleCols: handleCols, analyzeInfo: info, TblInfo: tblInfo})
 		}
 	}
@@ -1880,6 +1915,10 @@ func (b *PlanBuilder) buildAnalyze(as *ast.AnalyzeTableStmt) (Plan, error) {
 	if _, isTikvStorage := b.ctx.GetStore().(tikv.Storage); !isTikvStorage && b.ctx.GetSessionVars().EnableFastAnalyze {
 		return nil, errors.Errorf("Only support fast analyze in tikv storage.")
 	}
+	statsVersion := b.ctx.GetSessionVars().AnalyzeVersion
+	if b.ctx.GetSessionVars().EnableFastAnalyze && statsVersion == statistics.Version2 {
+		return nil, errors.Errorf("Fast analyze hasn't reached General Availability and only support analyze version 1 currently.")
+	}
 	for _, tbl := range as.TableNames {
 		user := b.ctx.GetSessionVars().User
 		var insertErr, selectErr error
@@ -1896,11 +1935,11 @@ func (b *PlanBuilder) buildAnalyze(as *ast.AnalyzeTableStmt) (Plan, error) {
 	}
 	if as.IndexFlag {
 		if len(as.IndexNames) == 0 {
-			return b.buildAnalyzeAllIndex(as, opts)
+			return b.buildAnalyzeAllIndex(as, opts, statsVersion)
 		}
-		return b.buildAnalyzeIndex(as, opts)
+		return b.buildAnalyzeIndex(as, opts, statsVersion)
 	}
-	return b.buildAnalyzeTable(as, opts)
+	return b.buildAnalyzeTable(as, opts, statsVersion)
 }
 
 func buildShowNextRowID() (*expression.Schema, types.NameSlice) {
@@ -2136,8 +2175,8 @@ func (b *PlanBuilder) buildShow(ctx context.Context, show *ast.ShowStmt) (Plan, 
 		err := ErrSpecificAccessDenied.GenWithStackByArgs("SHOW VIEW")
 		b.visitInfo = appendVisitInfo(b.visitInfo, mysql.ShowViewPriv, show.Table.Schema.L, show.Table.Name.L, "", err)
 	case ast.ShowBackups, ast.ShowRestores:
-		err := ErrSpecificAccessDenied.GenWithStackByArgs("SUPER")
-		b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SuperPriv, "", "", "", err)
+		err := ErrSpecificAccessDenied.GenWithStackByArgs("SUPER or BACKUP_ADMIN")
+		b.visitInfo = appendDynamicVisitInfo(b.visitInfo, "BACKUP_ADMIN", false, err)
 	case ast.ShowTableNextRowId:
 		p := &ShowNextRowID{TableName: show.Table}
 		p.setSchemaAndNames(buildShowNextRowID())
@@ -2211,7 +2250,7 @@ func (b *PlanBuilder) buildSimple(node ast.StmtNode) (Plan, error) {
 		err := ErrSpecificAccessDenied.GenWithStackByArgs("RELOAD")
 		b.visitInfo = appendVisitInfo(b.visitInfo, mysql.ReloadPriv, "", "", "", err)
 	case *ast.AlterInstanceStmt:
-		err := ErrSpecificAccessDenied.GenWithStack("ALTER INSTANCE")
+		err := ErrSpecificAccessDenied.GenWithStack("SUPER")
 		b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SuperPriv, "", "", "", err)
 	case *ast.AlterUserStmt:
 		err := ErrSpecificAccessDenied.GenWithStackByArgs("CREATE USER")
@@ -2225,11 +2264,11 @@ func (b *PlanBuilder) buildSimple(node ast.StmtNode) (Plan, error) {
 		b.visitInfo = collectVisitInfoFromGrantStmt(b.ctx, b.visitInfo, raw)
 	case *ast.BRIEStmt:
 		p.setSchemaAndNames(buildBRIESchema())
-		err := ErrSpecificAccessDenied.GenWithStackByArgs("SUPER")
-		b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SuperPriv, "", "", "", err)
+		err := ErrSpecificAccessDenied.GenWithStackByArgs("SUPER or BACKUP_ADMIN")
+		b.visitInfo = appendDynamicVisitInfo(b.visitInfo, "BACKUP_ADMIN", false, err)
 	case *ast.GrantRoleStmt, *ast.RevokeRoleStmt:
-		err := ErrSpecificAccessDenied.GenWithStackByArgs("SUPER")
-		b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SuperPriv, "", "", "", err)
+		err := ErrSpecificAccessDenied.GenWithStackByArgs("SUPER or ROLE_ADMIN")
+		b.visitInfo = appendDynamicVisitInfo(b.visitInfo, "ROLE_ADMIN", false, err)
 	case *ast.RevokeStmt:
 		b.visitInfo = collectVisitInfoFromRevokeStmt(b.ctx, b.visitInfo, raw)
 	case *ast.KillStmt:
@@ -2240,7 +2279,8 @@ func (b *PlanBuilder) buildSimple(node ast.StmtNode) (Plan, error) {
 			if pi, ok := sm.GetProcessInfo(raw.ConnectionID); ok {
 				loginUser := b.ctx.GetSessionVars().User
 				if pi.User != loginUser.Username {
-					b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SuperPriv, "", "", "", nil)
+					err := ErrSpecificAccessDenied.GenWithStackByArgs("SUPER or CONNECTION_ADMIN")
+					b.visitInfo = appendDynamicVisitInfo(b.visitInfo, "CONNECTION_ADMIN", false, err)
 				}
 			}
 		}
@@ -2301,10 +2341,7 @@ func collectVisitInfoFromGrantStmt(sctx sessionctx.Context, vi []visitInfo, stmt
 	for _, item := range stmt.Privs {
 
 		if item.Priv == mysql.ExtendedPriv {
-			fmt.Printf("### Attempting to set DYNAMIC privilege: %s\n", item.Name)
-			// TODO: check that the grant is to *.* otherwise it is an error with DYNAMIC privs.
-			// May need to validate this at the parser.
-			vi = appendDynamicVisitInfo(vi, item.Name, nil)
+			vi = appendDynamicVisitInfo(vi, item.Name, stmt.WithGrant, nil)
 			continue
 		}
 
@@ -2319,7 +2356,7 @@ func collectVisitInfoFromGrantStmt(sctx sessionctx.Context, vi []visitInfo, stmt
 			}
 			break
 		}
-		vi = appendVisitInfo(vi, item.Priv, dbName, tableName, "", nil) // this appends the mysql.ExtendedPriv priv requirement, which makes no sense.
+		vi = appendVisitInfo(vi, item.Priv, dbName, tableName, "", nil)
 	}
 
 	for _, priv := range allPrivs {
@@ -3223,9 +3260,9 @@ func (b *PlanBuilder) buildDDL(ctx context.Context, node ast.DDLNode) (Plan, err
 				var selectErr, insertErr error
 				user := b.ctx.GetSessionVars().User
 				if user != nil {
-					selectErr = ErrTableaccessDenied.GenWithStackByArgs("ADD TIDB_STATS", user.AuthUsername,
+					selectErr = ErrTableaccessDenied.GenWithStackByArgs("ADD STATS_EXTENDED", user.AuthUsername,
 						user.AuthHostname, v.Table.Name.L)
-					insertErr = ErrTableaccessDenied.GenWithStackByArgs("ADD TIDB_STATS", user.AuthUsername,
+					insertErr = ErrTableaccessDenied.GenWithStackByArgs("ADD STATS_EXTENDED", user.AuthUsername,
 						user.AuthHostname, "stats_extended")
 				}
 				b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SelectPriv, v.Table.Schema.L,
@@ -3235,7 +3272,7 @@ func (b *PlanBuilder) buildDDL(ctx context.Context, node ast.DDLNode) (Plan, err
 			} else if spec.Tp == ast.AlterTableDropStatistics {
 				user := b.ctx.GetSessionVars().User
 				if user != nil {
-					authErr = ErrTableaccessDenied.GenWithStackByArgs("DROP TIDB_STATS", user.AuthUsername,
+					authErr = ErrTableaccessDenied.GenWithStackByArgs("DROP STATS_EXTENDED", user.AuthUsername,
 						user.AuthHostname, "stats_extended")
 				}
 				b.visitInfo = appendVisitInfo(b.visitInfo, mysql.UpdatePriv, mysql.SystemDB,

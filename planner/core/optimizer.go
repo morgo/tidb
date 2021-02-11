@@ -15,7 +15,6 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"math"
 
 	"github.com/pingcap/errors"
@@ -96,16 +95,14 @@ func BuildLogicalPlan(ctx context.Context, sctx sessionctx.Context, node ast.Nod
 // CheckPrivilege checks the privilege for a user.
 func CheckPrivilege(activeRoles []*auth.RoleIdentity, pm privilege.Manager, vs []visitInfo) error {
 	for _, v := range vs {
-
 		if v.privilege == mysql.ExtendedPriv {
-			// TODO: We are checking to see if the user has a dynamic privilege,
-			// not a regular privilege. This should privilege check for that
-			// dynamic privilege or SUPER.
-			fmt.Printf("###### Checking to see if we have DYNAMIC privilege: %s\n", v.dynamicPriv)
-			continue
-		}
-
-		if !pm.RequestVerification(activeRoles, v.db, v.table, v.column, v.privilege) {
+			if !pm.RequestDynamicVerification(activeRoles, v.dynamicPriv, v.dynamicWithGrant) {
+				if v.err == nil {
+					return ErrPrivilegeCheckFail
+				}
+				return v.err
+			}
+		} else if !pm.RequestVerification(activeRoles, v.db, v.table, v.column, v.privilege) {
 			if v.err == nil {
 				return ErrPrivilegeCheckFail
 			}
