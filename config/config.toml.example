@@ -18,6 +18,10 @@ path = "/tmp/tidb"
 # The socket file to use for connection.
 socket = ""
 
+# only allow connections from the following hosts, specified as a CIDR block
+# Note: a firewall is usually a better fit!
+connection-allow-hosts = ["0.0.0.0/0", "::/0"]
+
 # Run ddl worker on this tidb-server.
 run-ddl = true
 
