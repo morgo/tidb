@@ -966,14 +966,6 @@ func (p *rangePruner) extractDataForPrune(sctx sessionctx.Context, expr expressi
 		// If the partition expression is fn(col), change constExpr to fn(constExpr).
 		constExpr = replaceColumnWithConst(p.partFn, con)
 
-		// When the partFn is not strict monotonous, we need to relax the condition < to <=, > to >=.
-		// For example, the following case doesn't hold:
-		// col < '2020-02-11 17:34:11' => to_days(col) < to_days(2020-02-11 17:34:11)
-		// The correct transform should be:
-		// col < '2020-02-11 17:34:11' => to_days(col) <= to_days(2020-02-11 17:34:11)
-		if p.monotonous == monotoneModeNonStrict {
-			ret.op = relaxOP(ret.op)
-		}
 	} else {
 		// If the partition expression is col, use constExpr.
 		constExpr = con

@@ -8690,3 +8690,23 @@ func (s *testIntegrationSerialSuite) TestCollationUnion2(c *C) {
 	tk.MustQuery("select * from (select a from t) aaa union all select null as a order by a").Check(testkit.Rows("<nil>", "aaaaaaaaa", "天王盖地虎宝塔镇河妖"))
 	tk.MustExec("drop table if exists t")
 }
+
+func (s *testIntegrationSerialSuite) TestPartitionPruning(c *C) {
+	// For issue 19941
+	// Explain is validated by explaintest.
+	tk := testkit.NewTestKit(c, s.store)
+	tk.MustExec("use test")
+
+	tk.MustExec("DROP TABLE IF EXISTS t1;")
+	tk.MustExec(`CREATE TABLE t1 (d date NOT NULL) PARTITION BY RANGE (YEAR(d))
+	 (PARTITION p2016 VALUES LESS THAN (2017), PARTITION p2017 VALUES LESS THAN (2018), PARTITION p2018 VALUES LESS THAN (2019),
+	 PARTITION p2019 VALUES LESS THAN (2020), PARTITION pmax VALUES LESS THAN MAXVALUE)`)
+
+	tk.MustExec(`INSERT INTO t1 VALUES ('2016-01-01'), ('2016-06-01'), ('2016-09-01'), ('2017-01-01'),
+	('2017-06-01'), ('2017-09-01'), ('2018-01-01'), ('2018-06-01'), ('2018-09-01'), ('2018-10-01'),
+	('2018-11-01'), ('2018-12-01'), ('2018-12-31'), ('2019-01-01'), ('2019-06-01'), ('2019-09-01'),
+	('2020-01-01'), ('2020-06-01'), ('2020-09-01');`)
+
+	tk.MustQuery("SELECT COUNT(*) FROM t1 WHERE d >= '2018-01-01' AND d < '2019-01-01'").Check(testkit.Rows("7"))
+	tk.MustQuery("SELECT COUNT(*) FROM t1 WHERE d >= '2018-01-01' AND d <= '2019-01-01'").Check(testkit.Rows("8"))
+}

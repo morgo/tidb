@@ -732,7 +732,7 @@ INSERT INTO t1 VALUES (1, '2009-01-01'), (1, '2009-04-01'), (2, '2009-04-01'),
 (1, '2009-04-05'), (1, '2009-04-06'), (1, '2009-04-07');
 EXPLAIN SELECT * FROM t1 WHERE b < CAST('2009-04-03' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402,p20090403	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:00)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= CAST('2009-04-03' AS DATETIME);
@@ -752,13 +752,13 @@ IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Select
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > CAST('2009-04-03' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:00)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
 WHERE b < CAST('2009-04-02 23:59:59' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-02 23:59:59)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
@@ -782,12 +782,12 @@ IndexReader_10	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	in
 EXPLAIN SELECT * FROM t1
 WHERE b > CAST('2009-04-02 23:59:59' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-02 23:59:59)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < CAST('2009-04-03' AS DATE);
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402,p20090403	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= CAST('2009-04-03' AS DATE);
@@ -807,12 +807,12 @@ IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Select
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > CAST('2009-04-03' AS DATE);
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < '2009-04-03 00:00:00';
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402,p20090403	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= '2009-04-03 00:00:00';
@@ -832,12 +832,12 @@ IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Select
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > '2009-04-03 00:00:00';
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < '2009-04-02 23:59:59';
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-02 23:59:59.000000)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= '2009-04-02 23:59:59';
@@ -857,12 +857,12 @@ IndexReader_10	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	in
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > '2009-04-02 23:59:59';
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-02 23:59:59.000000)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < '2009-04-03';
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402,p20090403	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= '2009-04-03';
@@ -882,13 +882,13 @@ IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Select
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > '2009-04-03';
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
 WHERE b < CAST('2009-04-03 00:00:01' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402,p20090403	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:01)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
@@ -912,13 +912,13 @@ IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Select
 EXPLAIN SELECT * FROM t1
 WHERE b > CAST('2009-04-03 00:00:01' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:01)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
 WHERE b < CAST('2009-04-02 23:59:58' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-02 23:59:58)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
@@ -942,7 +942,7 @@ IndexReader_10	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	in
 EXPLAIN SELECT * FROM t1
 WHERE b > CAST('2009-04-02 23:59:58' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-02 23:59:58)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 DROP TABLE t1;
@@ -963,7 +963,7 @@ INSERT INTO t1 VALUES (1, '2009-01-01'), (1, '2009-04-01'), (2, '2009-04-01'),
 (1, '2009-04-07');
 EXPLAIN SELECT * FROM t1 WHERE b < CAST('2009-04-03' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402,p20090403	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:00)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= CAST('2009-04-03' AS DATETIME);
@@ -983,13 +983,13 @@ IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Select
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > CAST('2009-04-03' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:00)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
 WHERE b < CAST('2009-04-02 23:59:59' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-02 23:59:59)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
@@ -1013,12 +1013,12 @@ IndexReader_10	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	in
 EXPLAIN SELECT * FROM t1
 WHERE b > CAST('2009-04-02 23:59:59' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-02 23:59:59)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < CAST('2009-04-03' AS DATE);
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402,p20090403	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= CAST('2009-04-03' AS DATE);
@@ -1038,12 +1038,12 @@ IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Select
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > CAST('2009-04-03' AS DATE);
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < '2009-04-03 00:00:00';
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402,p20090403	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= '2009-04-03 00:00:00';
@@ -1063,12 +1063,12 @@ IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Select
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > '2009-04-03 00:00:00';
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < '2009-04-02 23:59:59';
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-02 23:59:59.000000)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= '2009-04-02 23:59:59';
@@ -1088,12 +1088,12 @@ IndexReader_10	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	in
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > '2009-04-02 23:59:59';
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-02 23:59:59.000000)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < '2009-04-03';
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402,p20090403	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= '2009-04-03';
@@ -1113,13 +1113,13 @@ IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Select
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > '2009-04-03';
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
 WHERE b < CAST('2009-04-03 00:00:01' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402,p20090403	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:01)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
@@ -1143,13 +1143,13 @@ IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Select
 EXPLAIN SELECT * FROM t1
 WHERE b > CAST('2009-04-03 00:00:01' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:01)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
 WHERE b < CAST('2009-04-02 23:59:58' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3323.33	root	partition:p20090401,p20090402	index:Selection_9
+IndexReader_10	3323.33	root	partition:p20090401	index:Selection_9
 └─Selection_9	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-02 23:59:58)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
@@ -1173,7 +1173,7 @@ IndexReader_10	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	in
 EXPLAIN SELECT * FROM t1
 WHERE b > CAST('2009-04-02 23:59:58' AS DATETIME);
 id	estRows	task	access object	operator info
-IndexReader_10	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	index:Selection_9
+IndexReader_10	3333.33	root	partition:p20090403,p20090404,p20090405	index:Selection_9
 └─Selection_9	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-02 23:59:58)
   └─IndexFullScan_8	10000.00	cop[tikv]	table:t1, index:PRIMARY(a, b)	keep order:false, stats:pseudo
 DROP TABLE t1;
@@ -1193,7 +1193,7 @@ INSERT INTO t1 VALUES (1, '2009-01-01'), (1, '2009-04-01'), (2, '2009-04-01'),
 (1, '2009-04-05'), (1, '2009-04-06'), (1, '2009-04-07');
 EXPLAIN SELECT * FROM t1 WHERE b < CAST('2009-04-03' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402,p20090403	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:00)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= CAST('2009-04-03' AS DATETIME);
@@ -1213,13 +1213,13 @@ TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selectio
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > CAST('2009-04-03' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:00)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
 WHERE b < CAST('2009-04-02 23:59:59' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-02 23:59:59)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
@@ -1243,12 +1243,12 @@ TableReader_7	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	dat
 EXPLAIN SELECT * FROM t1
 WHERE b > CAST('2009-04-02 23:59:59' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-02 23:59:59)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < CAST('2009-04-03' AS DATE);
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402,p20090403	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= CAST('2009-04-03' AS DATE);
@@ -1268,12 +1268,12 @@ TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selectio
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > CAST('2009-04-03' AS DATE);
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < '2009-04-03 00:00:00';
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402,p20090403	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= '2009-04-03 00:00:00';
@@ -1293,12 +1293,12 @@ TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selectio
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > '2009-04-03 00:00:00';
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < '2009-04-02 23:59:59';
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-02 23:59:59.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= '2009-04-02 23:59:59';
@@ -1318,12 +1318,12 @@ TableReader_7	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	dat
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > '2009-04-02 23:59:59';
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-02 23:59:59.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < '2009-04-03';
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402,p20090403	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= '2009-04-03';
@@ -1343,13 +1343,13 @@ TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selectio
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > '2009-04-03';
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
 WHERE b < CAST('2009-04-03 00:00:01' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402,p20090403	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:01)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
@@ -1373,13 +1373,13 @@ TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selectio
 EXPLAIN SELECT * FROM t1
 WHERE b > CAST('2009-04-03 00:00:01' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:01)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
 WHERE b < CAST('2009-04-02 23:59:58' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-02 23:59:58)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
@@ -1403,7 +1403,7 @@ TableReader_7	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	dat
 EXPLAIN SELECT * FROM t1
 WHERE b > CAST('2009-04-02 23:59:58' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-02 23:59:58)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 DROP TABLE t1;
@@ -1423,7 +1423,7 @@ INSERT INTO t1 VALUES (1, '2009-01-01'), (1, '2009-04-01'), (2, '2009-04-01'),
 (1, '2009-04-07');
 EXPLAIN SELECT * FROM t1 WHERE b < CAST('2009-04-03' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402,p20090403	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:00)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= CAST('2009-04-03' AS DATETIME);
@@ -1443,13 +1443,13 @@ TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selectio
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > CAST('2009-04-03' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:00)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
 WHERE b < CAST('2009-04-02 23:59:59' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-02 23:59:59)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
@@ -1473,12 +1473,12 @@ TableReader_7	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	dat
 EXPLAIN SELECT * FROM t1
 WHERE b > CAST('2009-04-02 23:59:59' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-02 23:59:59)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < CAST('2009-04-03' AS DATE);
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402,p20090403	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= CAST('2009-04-03' AS DATE);
@@ -1498,12 +1498,12 @@ TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selectio
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > CAST('2009-04-03' AS DATE);
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < '2009-04-03 00:00:00';
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402,p20090403	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= '2009-04-03 00:00:00';
@@ -1523,12 +1523,12 @@ TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selectio
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > '2009-04-03 00:00:00';
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < '2009-04-02 23:59:59';
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-02 23:59:59.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= '2009-04-02 23:59:59';
@@ -1548,12 +1548,12 @@ TableReader_7	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	dat
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > '2009-04-02 23:59:59';
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-02 23:59:59.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b < '2009-04-03';
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402,p20090403	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b <= '2009-04-03';
@@ -1573,13 +1573,13 @@ TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selectio
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1 WHERE b > '2009-04-03';
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
 WHERE b < CAST('2009-04-03 00:00:01' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402,p20090403	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-03 00:00:01)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
@@ -1603,13 +1603,13 @@ TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selectio
 EXPLAIN SELECT * FROM t1
 WHERE b > CAST('2009-04-03 00:00:01' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-03 00:00:01)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
 WHERE b < CAST('2009-04-02 23:59:58' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p20090401,p20090402	data:Selection_6
+TableReader_7	3323.33	root	partition:p20090401	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.b, 2009-04-02 23:59:58)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 EXPLAIN SELECT * FROM t1
@@ -1633,7 +1633,7 @@ TableReader_7	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	dat
 EXPLAIN SELECT * FROM t1
 WHERE b > CAST('2009-04-02 23:59:58' AS DATETIME);
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p20090402,p20090403,p20090404,p20090405	data:Selection_6
+TableReader_7	3333.33	root	partition:p20090403,p20090404,p20090405	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t1.b, 2009-04-02 23:59:58)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 DROP TABLE t1;
@@ -1950,7 +1950,7 @@ partition p2 values less than (2000)
 insert into t8 values ('1985-05-05'),('1995-05-05');
 explain select * from t8 where a < '1980-02-02';
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p0,p1	data:Selection_6
+TableReader_7	3323.33	root	partition:p0	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t8.a, 1980-02-02 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t8	keep order:false, stats:pseudo
 create table t9 (a date not null) partition by RANGE(TO_DAYS(a)) (
@@ -1961,7 +1961,7 @@ partition p2 values less than (732664)  -- 2005-12-19
 insert into t9 values ('2005-05-05'), ('2005-04-04');
 explain select * from t9 where a <  '2004-12-19';
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:p0,p1	data:Selection_6
+TableReader_7	3323.33	root	partition:p0	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t9.a, 2004-12-19 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t9	keep order:false, stats:pseudo
 explain select * from t9 where a <= '2004-12-19';
@@ -2361,7 +2361,7 @@ INSERT INTO t1 VALUES ('2007-03-08 12:00:00');
 INSERT INTO t1 VALUES ('2007-03-15 12:00:00');
 explain select * from t1 where recdate < '2007-03-08 00:00:00';
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:all	data:Selection_6
+TableReader_7	3323.33	root	partition:p0	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.recdate, 2007-03-08 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 drop table t1;
@@ -2376,7 +2376,7 @@ INSERT INTO t1 VALUES ('2006-03-01 12:00:00');
 INSERT INTO t1 VALUES ('2006-03-01 12:00:00');
 explain select * from t1 where recdate < '2006-01-01 00:00:00';
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:all	data:Selection_6
+TableReader_7	3323.33	root	partition:p0	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t1.recdate, 2006-01-01 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t1	keep order:false, stats:pseudo
 drop table t1;
@@ -2483,7 +2483,7 @@ TableReader_7	3333.33	root	partition:p2	data:Selection_6
   └─TableFullScan_5	10000.00	cop[tikv]	table:t	keep order:false, stats:pseudo
 explain select * from t where ts > '2020-04-14 23:59:59.999' -- p1,p2;
 id	estRows	task	access object	operator info
-TableReader_7	3333.33	root	partition:p1,p2	data:Selection_6
+TableReader_7	3333.33	root	partition:p2	data:Selection_6
 └─Selection_6	3333.33	cop[tikv]		gt(test.t.ts, 2020-04-14 23:59:59.999000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t	keep order:false, stats:pseudo
 explain select * from t where ts > '2020-04-15 00:00:00.001' -- p2;
@@ -2518,12 +2518,12 @@ TableReader_7	3323.33	root	partition:all	data:Selection_6
   └─TableFullScan_5	10000.00	cop[tikv]	table:t	keep order:false, stats:pseudo
 explain select * from t where ts < '2020-04-15 00:00:00.001' -- p0,p1,p2;
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:all	data:Selection_6
+TableReader_7	3323.33	root	partition:p0,p1	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t.ts, 2020-04-15 00:00:00.001000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t	keep order:false, stats:pseudo
 explain select * from t where ts < '2020-04-15 00:00:00' -- expect perfect : p0,p1,  obtain: p0,p1,p2;
 id	estRows	task	access object	operator info
-TableReader_7	3323.33	root	partition:all	data:Selection_6
+TableReader_7	3323.33	root	partition:p0,p1	data:Selection_6
 └─Selection_6	3323.33	cop[tikv]		lt(test.t.ts, 2020-04-15 00:00:00.000000)
   └─TableFullScan_5	10000.00	cop[tikv]	table:t	keep order:false, stats:pseudo
 explain select * from t where ts < '2020-04-14 23:59:59.999' -- p0,p1;
