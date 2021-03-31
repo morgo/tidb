@@ -713,6 +713,7 @@ func (e *ShowExec) fetchShowStatus() error {
 			continue
 		}
 		if security.IsInvisibleStatusVar(status) {
+			// TODO: do a dynamic privilege check
 			continue
 		}
 		switch v.Value.(type) {

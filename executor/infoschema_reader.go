@@ -976,6 +976,7 @@ func (e *memtableRetriever) dataForTiKVStoreStatus(ctx sessionctx.Context) (err 
 
 		// If SEM is enabled, we need to patch-out columns
 		if security.IsEnabled() {
+			// TODO: do a dynamic privilege check, if it fails patch out the columns.
 			row[1].SetString(strconv.FormatInt(storeStat.Store.ID, 10), mysql.DefaultCollationName)
 			row[1].SetNull()
 			row[6].SetNull()
@@ -1135,6 +1136,7 @@ func (e *memtableRetriever) dataForTiDBClusterInfo(ctx sessionctx.Context) error
 			server.ServerID,
 		)
 		if security.IsEnabled() {
+			// TODO: do a dynamic privilege check, if it fails patch out the columns.
 			row[1].SetString(strconv.FormatUint(server.ServerID, 10), mysql.DefaultCollationName)
 			row[1].SetNull()
 			row[2].SetNull()
@@ -1763,6 +1765,7 @@ func (e *memtableRetriever) setDataForServersInfo() error {
 			stringutil.BuildStringFromLabels(info.Labels), // LABELS
 		)
 		if security.IsEnabled() {
+			// TODO: do a dynamic privilege check, if it fails patch out the columns.
 			row[1].SetNull() // clear IP
 		}
 		rows = append(rows, row)

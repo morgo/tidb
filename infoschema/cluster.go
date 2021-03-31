@@ -86,6 +86,7 @@ func AppendHostInfoToRows(rows [][]types.Datum) ([][]types.Datum, error) {
 	}
 	addr := serverInfo.IP + ":" + strconv.FormatUint(uint64(serverInfo.StatusPort), 10)
 	if security.IsEnabled() {
+		// TODO: do a dynamic privilege check
 		addr = serverInfo.ID
 	}
 	for i := range rows {

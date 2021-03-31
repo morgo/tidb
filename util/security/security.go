@@ -74,6 +74,7 @@ const (
 	tidbProfileMutex      = "tidb_profile_mutex"
 	tikvProfileCPU        = "tikv_profile_cpu"
 	tidbGCLeaderDesc      = "tidb_gc_leader_desc"
+	restrictedPriv        = "RESTRICTED_"
 )
 
 var secureVarsList = []string{
@@ -187,4 +188,13 @@ func IsInvisibleStatusVar(varName string) bool {
 		return false
 	}
 	return varName == tidbGCLeaderDesc
+}
+
+// IsRestrictedPrivilege returns true if SEM is enabled and the
+// privilege shuld not be satified by SUPER
+func IsRestrictedPrivilege(privNameInUpper string) bool {
+	if !IsEnabled() {
+		return false
+	}
+	return privNameInUpper[:11] == restrictedPriv
 }

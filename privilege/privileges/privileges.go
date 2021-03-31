@@ -38,7 +38,16 @@ import (
 var SkipWithGrant = false
 
 var _ privilege.Manager = (*UserPrivileges)(nil)
-var dynamicPrivs = []string{"BACKUP_ADMIN", "SYSTEM_VARIABLES_ADMIN", "ROLE_ADMIN", "CONNECTION_ADMIN"}
+var dynamicPrivs = []string{
+	"BACKUP_ADMIN",
+	"SYSTEM_VARIABLES_ADMIN",
+	"ROLE_ADMIN",
+	"CONNECTION_ADMIN",
+	"RESTRICTED_STATUS_VARIABLES_ADMIN", // TIDB Extension: Can see everything in SHOW GLOBAL STATUS
+	"RESTRICTED_CONNECTION_ADMIN",       // TIDB Extension: Connections can't be killed by SUPER/CONNECTION ADMIN
+	"RESTRICTED_USER",                   // TIDB Extension: Access can't be changed by super users
+	"RESTRICTED_TABLES",                 // TIDB Extension: Hidden tables restriction does not apply
+}
 var dynamicPrivLock sync.Mutex
 
 // UserPrivileges implements privilege.Manager interface.
@@ -77,6 +86,7 @@ func (p *UserPrivileges) RequestVerification(activeRoles []*auth.RoleIdentity, d
 	dbLowerName := strings.ToLower(db)
 	tblLowerName := strings.ToLower(table)
 	if security.IsInvisibleTable(dbLowerName, tblLowerName) {
+		// TODO: do a dynamic privilege check
 		return false
 	}
 
@@ -102,6 +112,7 @@ func (p *UserPrivileges) RequestVerification(activeRoles []*auth.RoleIdentity, d
 	// SELECT or existence (AllPrivMask) to a list of tables
 	case mysql.SystemDB:
 		if security.IsReadOnlySystemTable(tblLowerName) {
+			// TODO: do a dynamic privilege check
 			if !(priv == mysql.SelectPriv || priv == mysql.AllPrivMask) {
 				return false
 			}
@@ -402,6 +413,7 @@ func (p *UserPrivileges) DBIsVisible(activeRoles []*auth.RoleIdentity, db string
 		return true
 	}
 	if security.IsInvisibleSchema(db) {
+		// TODO: do a dynamic privilege check
 		return false
 	}
 	mysqlPriv := p.Handle.Get()
