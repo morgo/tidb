@@ -708,13 +708,16 @@ func (e *ShowExec) fetchShowStatus() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	checker := privilege.GetPrivilegeManager(e.ctx)
 	for status, v := range statusVars {
 		if e.GlobalScope && v.Scope == variable.ScopeSession {
 			continue
 		}
+		// Skip invisible status vars if permission fails.
 		if security.IsInvisibleStatusVar(status) {
-			// TODO: do a dynamic privilege check
-			continue
+			if checker == nil || !checker.RequestDynamicVerification(sessionVars.ActiveRoles, "RESTRICTED_STATUS_VARIABLES_ADMIN", false) {
+				continue
+			}
 		}
 		switch v.Value.(type) {
 		case []interface{}, nil:
