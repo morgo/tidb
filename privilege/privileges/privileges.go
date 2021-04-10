@@ -45,8 +45,8 @@ var dynamicPrivs = []string{
 	"CONNECTION_ADMIN",
 	"RESTRICTED_STATUS_VARIABLES_ADMIN", // TIDB Extension: Can see everything in SHOW GLOBAL STATUS
 	"RESTRICTED_CONNECTION_ADMIN",       // TIDB Extension: Connections can't be killed by SUPER/CONNECTION ADMIN
-	"RESTRICTED_USER",                   // TIDB Extension: Access can't be changed by super users
-	"RESTRICTED_TABLES",                 // TIDB Extension: Hidden tables restriction does not apply
+	"RESTRICTED_USER_ADMIN",             // TIDB Extension: Access can't be changed by super users
+	"RESTRICTED_TABLES_ADMIN",           // TIDB Extension: Hidden tables restriction does not apply
 }
 var dynamicPrivLock sync.Mutex
 
@@ -71,6 +71,39 @@ func (p *UserPrivileges) RequestDynamicVerification(activeRoles []*auth.RoleIden
 	return mysqlPriv.RequestDynamicVerification(activeRoles, p.user, p.host, privName, grantable)
 }
 
+// RequestSEMVerification implements the Manager interface.
+// It is like RequestDynamicVerification except it only enforces when SEM is enabled.
+func (p *UserPrivileges) RequestSEMVerification(activeRoles []*auth.RoleIdentity, privName string, grantable bool) bool {
+	if SkipWithGrant {
+		return true
+	}
+	if p.user == "" && p.host == "" {
+		return true
+	}
+	if !security.IsEnabled() {
+		return true
+	}
+	mysqlPriv := p.Handle.Get()
+	return mysqlPriv.RequestDynamicVerification(activeRoles, p.user, p.host, privName, grantable)
+}
+
+// IsRestrictedUser implements the Manager interface.
+// This function is used by SEM.
+func (p *UserPrivileges) IsRestrictedUser(user, host string) bool {
+	if SkipWithGrant {
+		return false
+	}
+	if p.user == "" && p.host == "" {
+		return false
+	}
+	// Do the actual check to see if a user contains the privilege RESTRICTED_USER_ADMIN.
+	// This can only consider defaultRoles and not activeRoles because the sessionManager
+	// doesn't contain this / it is complicated to do this across global KILL.
+	mysqlPriv := p.Handle.Get()
+	roles := mysqlPriv.getDefaultRoles(user, host)
+	return mysqlPriv.RequestDynamicVerification(roles, user, host, "RESTRICTED_USER_ADMIN", false)
+}
+
 // RequestVerification implements the Manager interface.
 func (p *UserPrivileges) RequestVerification(activeRoles []*auth.RoleIdentity, db, table, column string, priv mysql.PrivilegeType) bool {
 	if SkipWithGrant {
@@ -85,11 +118,21 @@ func (p *UserPrivileges) RequestVerification(activeRoles []*auth.RoleIdentity, d
 	// See https://dev.mysql.com/doc/refman/5.7/en/information-schema.html
 	dbLowerName := strings.ToLower(db)
 	tblLowerName := strings.ToLower(table)
-	if security.IsInvisibleTable(dbLowerName, tblLowerName) {
-		// TODO: do a dynamic privilege check
-		return false
-	}
 
+	// If sem is enabled and the user does not have RESTRICTED_TABLES_ADMIN privilege.
+	// any system tables are read-only at most.
+	if !p.RequestSEMVerification(activeRoles, "RESTRICTED_TABLES_ADMIN", false) {
+		if security.IsInvisibleTable(dbLowerName, tblLowerName) {
+			return false
+		}
+		if util.IsMemOrSysDB(dbLowerName) {
+			switch priv {
+			case mysql.CreatePriv, mysql.AlterPriv, mysql.DropPriv, mysql.IndexPriv, mysql.CreateViewPriv,
+				mysql.InsertPriv, mysql.UpdatePriv, mysql.DeletePriv:
+				return false
+			}
+		}
+	}
 	switch dbLowerName {
 	case util.InformationSchemaName.L:
 		switch priv {
@@ -98,6 +141,7 @@ func (p *UserPrivileges) RequestVerification(activeRoles []*auth.RoleIdentity, d
 			return false
 		}
 		return true
+	// We should be very careful of limiting privileges, so ignore `mysql` for now.
 	case util.PerformanceSchemaName.L, util.MetricSchemaName.L:
 		if (dbLowerName == util.PerformanceSchemaName.L && perfschema.IsPredefinedTable(table)) ||
 			(dbLowerName == util.MetricSchemaName.L && infoschema.IsMetricTable(table)) {
@@ -106,15 +150,6 @@ func (p *UserPrivileges) RequestVerification(activeRoles []*auth.RoleIdentity, d
 				return false
 			case mysql.SelectPriv:
 				return true
-			}
-		}
-	// When in security enhanced mode, refuse anything except
-	// SELECT or existence (AllPrivMask) to a list of tables
-	case mysql.SystemDB:
-		if security.IsReadOnlySystemTable(tblLowerName) {
-			// TODO: do a dynamic privilege check
-			if !(priv == mysql.SelectPriv || priv == mysql.AllPrivMask) {
-				return false
 			}
 		}
 	}
@@ -412,8 +447,7 @@ func (p *UserPrivileges) DBIsVisible(activeRoles []*auth.RoleIdentity, db string
 	if SkipWithGrant {
 		return true
 	}
-	if security.IsInvisibleSchema(db) {
-		// TODO: do a dynamic privilege check
+	if security.IsInvisibleSchema(db) && !p.RequestSEMVerification(activeRoles, "RESTRICTED_TABLES_ADMIN", false) {
 		return false
 	}
 	mysqlPriv := p.Handle.Get()

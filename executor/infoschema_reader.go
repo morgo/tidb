@@ -53,7 +53,6 @@ import (
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/collate"
 	"github.com/pingcap/tidb/util/pdapi"
-	"github.com/pingcap/tidb/util/security"
 	"github.com/pingcap/tidb/util/set"
 	"github.com/pingcap/tidb/util/sqlexec"
 	"github.com/pingcap/tidb/util/stmtsummary"
@@ -982,17 +981,14 @@ func (e *memtableRetriever) dataForTiKVStoreStatus(ctx sessionctx.Context) (err 
 
 		// If SEM is enabled, we need to check if the user has the restricted table privilege.
 		// if not, we patch out columns.
-
-		if security.IsEnabled() {
-			checker := privilege.GetPrivilegeManager(ctx)
-			if checker == nil || !checker.RequestDynamicVerification(ctx.GetSessionVars().ActiveRoles, "RESTRICTED_TABLES_ADMIN", false) {
-				row[1].SetString(strconv.FormatInt(storeStat.Store.ID, 10), mysql.DefaultCollationName)
-				row[1].SetNull()
-				row[6].SetNull()
-				row[7].SetNull()
-				row[16].SetNull()
-				row[18].SetNull()
-			}
+		checker := privilege.GetPrivilegeManager(ctx)
+		if checker == nil || !checker.RequestSEMVerification(ctx.GetSessionVars().ActiveRoles, "RESTRICTED_TABLES_ADMIN", false) {
+			row[1].SetString(strconv.FormatInt(storeStat.Store.ID, 10), mysql.DefaultCollationName)
+			row[1].SetNull()
+			row[6].SetNull()
+			row[7].SetNull()
+			row[16].SetNull()
+			row[18].SetNull()
 		}
 		e.rows = append(e.rows, row)
 	}
@@ -1140,15 +1136,13 @@ func (e *memtableRetriever) dataForTiDBClusterInfo(ctx sessionctx.Context) error
 		// If SEM is enabled, we need to check if the user has the restricted table privilege.
 		// if not, we patch out columns.
 
-		if security.IsEnabled() {
-			checker := privilege.GetPrivilegeManager(ctx)
-			if checker == nil || !checker.RequestDynamicVerification(ctx.GetSessionVars().ActiveRoles, "RESTRICTED_TABLES_ADMIN", false) {
-				row[1].SetString(strconv.FormatUint(server.ServerID, 10), mysql.DefaultCollationName)
-				row[1].SetNull()
-				row[2].SetNull()
-				row[5].SetNull()
-				row[6].SetNull()
-			}
+		checker := privilege.GetPrivilegeManager(ctx)
+		if checker == nil || !checker.RequestSEMVerification(ctx.GetSessionVars().ActiveRoles, "RESTRICTED_TABLES_ADMIN", false) {
+			row[1].SetString(strconv.FormatUint(server.ServerID, 10), mysql.DefaultCollationName)
+			row[1].SetNull()
+			row[2].SetNull()
+			row[5].SetNull()
+			row[6].SetNull()
 		}
 		rows = append(rows, row)
 	}
@@ -1775,11 +1769,9 @@ func (e *memtableRetriever) setDataForServersInfo(ctx sessionctx.Context) error 
 		// If SEM is enabled, we need to check if the user has the restricted table privilege.
 		// if not, we patch out columns.
 
-		if security.IsEnabled() {
-			checker := privilege.GetPrivilegeManager(ctx)
-			if checker == nil || !checker.RequestDynamicVerification(ctx.GetSessionVars().ActiveRoles, "RESTRICTED_TABLES_ADMIN", false) {
-				row[1].SetNull() // clear IP
-			}
+		checker := privilege.GetPrivilegeManager(ctx)
+		if checker == nil || !checker.RequestSEMVerification(ctx.GetSessionVars().ActiveRoles, "RESTRICTED_TABLES_ADMIN", false) {
+			row[1].SetNull() // clear IP
 		}
 		rows = append(rows, row)
 	}

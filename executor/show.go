@@ -715,7 +715,7 @@ func (e *ShowExec) fetchShowStatus() error {
 		}
 		// Skip invisible status vars if permission fails.
 		if security.IsInvisibleStatusVar(status) {
-			if checker == nil || !checker.RequestDynamicVerification(sessionVars.ActiveRoles, "RESTRICTED_STATUS_VARIABLES_ADMIN", false) {
+			if checker == nil || !checker.RequestSEMVerification(sessionVars.ActiveRoles, "RESTRICTED_STATUS_VARIABLES_ADMIN", false) {
 				continue
 			}
 		}
@@ -1380,7 +1380,6 @@ func (e *ShowExec) fetchShowGrants() error {
 }
 
 func (e *ShowExec) fetchShowPrivileges() error {
-	e.appendRow([]interface{}{"Alter", "Tables", "To alter the table"})
 	e.appendRow([]interface{}{"Alter", "Tables", "To alter the table"})
 	e.appendRow([]interface{}{"Alter routine", "Functions,Procedures", "To alter or drop stored functions/procedures"})
 	e.appendRow([]interface{}{"Create", "Databases,Tables,Indexes", "To create new databases and tables"})

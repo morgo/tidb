@@ -23,22 +23,6 @@ import (
 )
 
 const (
-	bindInfo              = "bind_info"
-	columnsPriv           = "columns_priv"
-	db                    = "db"
-	defaultRoles          = "default_roles"
-	globalPriv            = "global_priv"
-	helpTopic             = "help_topic" // TODO: will this cause client problems?
-	roleEdges             = "role_edges"
-	schemaIndexUsage      = "schema_index_usage"
-	statsBuckets          = "stats_buckets"
-	statsExtended         = "stats_extended"
-	statsFeedback         = "stats_feedback"
-	statsHistograms       = "stats_histograms"
-	statsMeta             = "stats_meta"
-	statsTopN             = "stats_top_n"
-	tablesPriv            = "tables_priv"
-	user                  = "user"
 	metricsSchema         = "metrics_schema"
 	exprPushdownBlacklist = "expr_pushdown_blacklist"
 	gcDeleteRange         = "gc_delete_range"
@@ -124,21 +108,6 @@ func Disable() {
 // IsEnabled checks if Security Enhanced Mode (SEM) is enabled
 func IsEnabled() bool {
 	return config.GetGlobalConfig().Experimental.EnableEnhancedSecurity
-}
-
-// IsReadOnlySystemTable returns true if SEM is enabled
-// and the tblLowerName needs to be read-only
-func IsReadOnlySystemTable(tblLowerName string) bool {
-	if !IsEnabled() {
-		return false
-	}
-	switch tblLowerName {
-	case bindInfo, columnsPriv, db, defaultRoles, globalPriv, helpTopic,
-		roleEdges, schemaIndexUsage, statsBuckets, statsExtended, statsFeedback,
-		statsHistograms, statsMeta, statsTopN, tablesPriv, user:
-		return true
-	}
-	return false
 }
 
 // IsInvisibleSchema returns true if SEM is enabled

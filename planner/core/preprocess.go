@@ -1204,7 +1204,7 @@ func (p *preprocessor) handleRepairName(tn *ast.TableName) {
 
 func (p *preprocessor) resolveShowStmt(node *ast.ShowStmt) {
 	if security.IsEnabled() && node.Tp == ast.ShowConfig {
-		p.err = errors.New("tidb-server is running in enhanced security mode")
+		p.err = ErrNotSupportedWithSem.GenWithStackByArgs("SHOW CONFIG")
 	}
 	if node.DBName == "" {
 		if node.Table != nil && node.Table.Schema.L != "" {

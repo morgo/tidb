@@ -23,7 +23,6 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util"
-	"github.com/pingcap/tidb/util/security"
 )
 
 // Cluster table list, attention:
@@ -87,11 +86,9 @@ func AppendHostInfoToRows(ctx sessionctx.Context, rows [][]types.Datum) ([][]typ
 		return nil, err
 	}
 	addr := serverInfo.IP + ":" + strconv.FormatUint(uint64(serverInfo.StatusPort), 10)
-	if security.IsEnabled() {
-		checker := privilege.GetPrivilegeManager(ctx)
-		if checker == nil || !checker.RequestDynamicVerification(ctx.GetSessionVars().ActiveRoles, "RESTRICTED_TABLES_ADMIN", false) {
-			addr = serverInfo.ID
-		}
+	checker := privilege.GetPrivilegeManager(ctx)
+	if checker == nil || !checker.RequestSEMVerification(ctx.GetSessionVars().ActiveRoles, "RESTRICTED_TABLES_ADMIN", false) {
+		addr = serverInfo.ID
 	}
 	for i := range rows {
 		row := make([]types.Datum, 0, len(rows[i])+1)

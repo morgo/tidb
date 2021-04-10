@@ -46,23 +46,6 @@ func (s *testSecurity) TestGetSetSysVars(c *C) {
 	c.Assert(IsEnabled(), IsFalse)
 }
 
-func (s *testSecurity) TestIsReadOnlySystemTable(c *C) {
-	Enable()
-	tbls := []string{bindInfo, columnsPriv, db, defaultRoles, globalPriv, helpTopic,
-		roleEdges, schemaIndexUsage, statsBuckets, statsExtended, statsFeedback,
-		statsHistograms, statsMeta, statsTopN, tablesPriv, user}
-
-	for _, tbl := range tbls {
-		c.Assert(IsReadOnlySystemTable(tbl), IsTrue)
-	}
-
-	Disable()
-
-	for _, tbl := range tbls {
-		c.Assert(IsReadOnlySystemTable(tbl), IsFalse)
-	}
-}
-
 func (s *testSecurity) TestInvisibleSchema(c *C) {
 	Enable()
 	c.Assert(IsInvisibleSchema(metricsSchema), IsTrue)
@@ -126,4 +109,21 @@ func (s *testSecurity) TestIsInvisibleStatusVar(c *C) {
 	c.Assert(IsInvisibleStatusVar("server_id"), IsFalse)
 	c.Assert(IsInvisibleStatusVar("ddl_schema_version"), IsFalse)
 	c.Assert(IsInvisibleStatusVar("Ssl_version"), IsFalse)
+}
+
+func (s *testSecurity) TestIsRestrictedPrivilege(c *C) {
+	Enable()
+	c.Assert(IsRestrictedPrivilege("RESTRICTED_USER_ADMIN"), IsTrue)
+	c.Assert(IsRestrictedPrivilege("RESTRICTED_CONNECTION_ADMIN"), IsTrue)
+	c.Assert(IsRestrictedPrivilege("RESTRICTED_TABLES_ADMIN"), IsTrue)
+	c.Assert(IsRestrictedPrivilege("RESTRICTED_STATUS_VARIABLES_ADMIN"), IsTrue)
+	c.Assert(IsRestrictedPrivilege("CONNECTION_ADMIN"), IsFalse)
+	c.Assert(IsRestrictedPrivilege("BACKUP_ADMIN"), IsFalse)
+	Disable()
+	c.Assert(IsRestrictedPrivilege("RESTRICTED_USER_ADMIN"), IsFalse)
+	c.Assert(IsRestrictedPrivilege("RESTRICTED_CONNECTION_ADMIN"), IsFalse)
+	c.Assert(IsRestrictedPrivilege("RESTRICTED_TABLES_ADMIN"), IsFalse)
+	c.Assert(IsRestrictedPrivilege("RESTRICTED_STATUS_VARIABLES_ADMIN"), IsFalse)
+	c.Assert(IsRestrictedPrivilege("CONNECTION_ADMIN"), IsFalse)
+	c.Assert(IsRestrictedPrivilege("BACKUP_ADMIN"), IsFalse)
 }

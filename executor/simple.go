@@ -1020,8 +1020,8 @@ func (e *SimpleExec) executeGrantRole(s *ast.GrantRoleStmt) error {
 }
 
 func (e *SimpleExec) executeDropUser(s *ast.DropUserStmt) error {
-	// Check privileges.
-	// Check `CREATE USER` privilege.
+	// privilege checking is usually done in planbuilder, but these are OR rules which are not supported.
+	// TODO: check if this is MySQL compatible and can be simplified.
 	if !config.GetGlobalConfig().Security.SkipGrantTable {
 		checker := privilege.GetPrivilegeManager(e.ctx)
 		if checker == nil {
