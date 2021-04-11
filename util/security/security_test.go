@@ -119,6 +119,7 @@ func (s *testSecurity) TestIsRestrictedPrivilege(c *C) {
 	c.Assert(IsRestrictedPrivilege("RESTRICTED_STATUS_VARIABLES_ADMIN"), IsTrue)
 	c.Assert(IsRestrictedPrivilege("CONNECTION_ADMIN"), IsFalse)
 	c.Assert(IsRestrictedPrivilege("BACKUP_ADMIN"), IsFalse)
+	c.Assert(IsRestrictedPrivilege("aa"), IsFalse)
 	Disable()
 	c.Assert(IsRestrictedPrivilege("RESTRICTED_USER_ADMIN"), IsFalse)
 	c.Assert(IsRestrictedPrivilege("RESTRICTED_CONNECTION_ADMIN"), IsFalse)
@@ -126,4 +127,5 @@ func (s *testSecurity) TestIsRestrictedPrivilege(c *C) {
 	c.Assert(IsRestrictedPrivilege("RESTRICTED_STATUS_VARIABLES_ADMIN"), IsFalse)
 	c.Assert(IsRestrictedPrivilege("CONNECTION_ADMIN"), IsFalse)
 	c.Assert(IsRestrictedPrivilege("BACKUP_ADMIN"), IsFalse)
+	c.Assert(IsRestrictedPrivilege("aa"), IsFalse)
 }

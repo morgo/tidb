@@ -67,7 +67,6 @@ var secureVarsList = []string{
 	variable.TiDBCheckMb4ValueInUTF8,
 	variable.TiDBConfig,
 	variable.TiDBEnableSlowLog,
-	variable.TiDBEnableTelemetry,
 	variable.TiDBExpensiveQueryTimeThreshold,
 	variable.TiDBForcePriority,
 	variable.TiDBGeneralLog,
@@ -76,11 +75,13 @@ var secureVarsList = []string{
 	variable.TiDBOptWriteRowID,
 	variable.TiDBPProfSQLCPU,
 	variable.TiDBRecordPlanInSlowLog,
-	variable.TiDBRowFormatVersion,
 	variable.TiDBSlowQueryFile,
 	variable.TiDBSlowLogThreshold,
 	variable.TiDBEnableCollectExecutionInfo,
 	variable.TiDBMemoryUsageAlarmRatio,
+	// Not supported yet (used internally):
+	// variable.TiDBEnableTelemetry,
+	// variable.TiDBRowFormatVersion,
 }
 
 // Enable enables SEM. This is intended to be used by the test-suite.
@@ -91,6 +92,9 @@ func Enable() {
 		variable.UnregisterSysVar(name)
 	}
 	config.GetGlobalConfig().Experimental.EnableEnhancedSecurity = true
+
+	// Change the status of the sysVar
+	variable.SetSysVar(variable.TiDBEnableEnhancedSecurity, variable.BoolOn)
 }
 
 // Disable disables SEM. This is intended to be used by the test-suite.
@@ -103,6 +107,9 @@ func Disable() {
 		variable.RegisterSysVarFromDefaults(name)
 	}
 	config.GetGlobalConfig().Experimental.EnableEnhancedSecurity = false
+
+	// Change the status of the sysVar
+	variable.SetSysVar(variable.TiDBEnableEnhancedSecurity, variable.BoolOff)
 }
 
 // IsEnabled checks if Security Enhanced Mode (SEM) is enabled
@@ -163,6 +170,9 @@ func IsInvisibleStatusVar(varName string) bool {
 // privilege shuld not be satified by SUPER
 func IsRestrictedPrivilege(privNameInUpper string) bool {
 	if !IsEnabled() {
+		return false
+	}
+	if len(privNameInUpper) < 12 {
 		return false
 	}
 	return privNameInUpper[:11] == restrictedPriv

@@ -5482,21 +5482,13 @@ func (s *testIntegrationSuite) TestIssue10804(c *C) {
 	tk.MustQuery(`SELECT @@GLOBAL.information_schema_stats_expiry`).Check(testkit.Rows(`0`))
 }
 
-func (s *testIntegrationSuite) testSecurityEnhancedMode(c *C) {
+func (s *testIntegrationSuite) TestSecurityEnhancedMode(c *C) {
 	tk := testkit.NewTestKit(c, s.store)
-
-	tk.MustQuery("SELECT COUNT(*) FROM information_schema.tidb_servers_info WHERE ip IS NOT NULL").Check(testkit.Rows("1"))
-	tk.MustQuery("SHOW GLOBAL VARIABLES LIKE 'tidb_row_format_version'").Check(testkit.Rows("tidb_row_format_version 2"))
-
+	tk.MustQuery("SHOW VARIABLES LIKE 'tidb_enable_slow_log'").Check(testkit.Rows("tidb_enable_slow_log ON"))
 	security.Enable()
-	tk.MustQuery("SHOW GLOBAL VARIABLES LIKE 'tidb_row_format_version'").Check(testkit.Rows())
-	tk.MustQuery("SELECT COUNT(*) FROM information_schema.tidb_servers_info WHERE ip IS NOT NULL").Check(testkit.Rows("0"))
+	tk.MustQuery("SHOW VARIABLES LIKE 'tidb_enable_slow_log'").Check(testkit.Rows())
 	security.Disable()
-
-	// Supports the same behavior after. Dynamic changing is not a requirement, but SEM supports it.
-	tk.MustQuery("SELECT COUNT(*) FROM information_schema.tidb_servers_info WHERE ip IS NOT NULL").Check(testkit.Rows("1"))
-	tk.MustQuery("SHOW GLOBAL VARIABLES LIKE 'tidb_row_format_version'").Check(testkit.Rows("tidb_row_format_version 2"))
-
+	tk.MustQuery("SHOW VARIABLES LIKE 'tidb_enable_slow_log'").Check(testkit.Rows("tidb_enable_slow_log ON"))
 }
 
 func (s *testIntegrationSuite) TestInvalidEndingStatement(c *C) {

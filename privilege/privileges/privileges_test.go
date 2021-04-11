@@ -38,6 +38,7 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/store/mockstore"
 	"github.com/pingcap/tidb/util"
+	"github.com/pingcap/tidb/util/security"
 	"github.com/pingcap/tidb/util/testkit"
 	"github.com/pingcap/tidb/util/testleak"
 	"github.com/pingcap/tidb/util/testutil"
@@ -1307,4 +1308,43 @@ func (s *testPrivilegeSuite) TestDynamicGrantOption(c *C) {
 
 	c.Assert(se2.Auth(&auth.UserIdentity{Username: "varuser2", Hostname: "%"}, nil, nil), IsTrue)
 	mustExec(c, se2, "GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO varuser3")
+}
+
+func (s *testPrivilegeSuite) TestSecurityEnhancedMode(c *C) {
+
+	cloudAdminSe := newSession(c, s.store, s.dbName)
+	mustExec(c, cloudAdminSe, "CREATE USER cloudadmin")
+	mustExec(c, cloudAdminSe, "SET tidb_enable_dynamic_privileges=1")
+	mustExec(c, cloudAdminSe, "GRANT RESTRICTED_USER_ADMIN, SELECT ON *.* to cloudadmin") // Internal user
+	mustExec(c, cloudAdminSe, "CREATE USER uroot")
+	mustExec(c, cloudAdminSe, "GRANT ALL ON *.* to uroot WITH GRANT OPTION") // A "MySQL" all powerful user.
+	c.Assert(cloudAdminSe.Auth(&auth.UserIdentity{Username: "cloudadmin", Hostname: "%"}, nil, nil), IsTrue)
+	urootSe := newSession(c, s.store, s.dbName)
+	mustExec(c, urootSe, "SET tidb_enable_dynamic_privileges=1")
+	c.Assert(urootSe.Auth(&auth.UserIdentity{Username: "uroot", Hostname: "%"}, nil, nil), IsTrue)
+
+	security.Enable()
+
+	_, err := urootSe.ExecuteInternal(context.Background(), "SET PASSWORD FOR cloudadmin = 'acdc'")
+	c.Assert(err.Error(), Equals, "[planner:1227]Access denied; you need (at least one of) the RESTRICTED_USER_ADMIN privilege(s) for this operation")
+
+	_, err = urootSe.ExecuteInternal(context.Background(), "REVOKE SELECT ON *.* FROM cloudadmin")
+	c.Assert(err.Error(), Equals, "[planner:1227]Access denied; you need (at least one of) the RESTRICTED_USER_ADMIN privilege(s) for this operation")
+
+	_, err = urootSe.ExecuteInternal(context.Background(), "REVOKE RESTRICTED_USER_ADMIN ON *.* FROM cloudadmin")
+	c.Assert(err.Error(), Equals, "[planner:8121]privilege check fail") // error messages from REVOKE could be improved.
+
+	_, err = urootSe.ExecuteInternal(context.Background(), "DROP USER cloudadmin")
+	c.Assert(err.Error(), Equals, "[planner:1227]Access denied; you need (at least one of) the RESTRICTED_USER_ADMIN privilege(s) for this operation")
+
+	// Confirm that cloudAdmin can still change their password
+	mustExec(c, cloudAdminSe, "SET password='acdc'")
+
+	security.Disable()
+
+	mustExec(c, urootSe, "SET PASSWORD FOR cloudadmin = '1234'")
+	mustExec(c, urootSe, "REVOKE SELECT ON *.* FROM cloudadmin")
+	mustExec(c, urootSe, "REVOKE RESTRICTED_USER_ADMIN ON *.* FROM cloudadmin") // still works.
+	mustExec(c, urootSe, "DROP USER cloudadmin")
+
 }

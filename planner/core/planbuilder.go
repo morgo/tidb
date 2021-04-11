@@ -2222,7 +2222,9 @@ func (b *PlanBuilder) buildSimple(node ast.StmtNode) (Plan, error) {
 	case *ast.AlterUserStmt:
 		err := ErrSpecificAccessDenied.GenWithStackByArgs("CREATE USER")
 		b.visitInfo = appendVisitInfo(b.visitInfo, mysql.CreateUserPriv, "", "", "", err)
-
+		for _, u := range raw.Specs {
+			b.visitInfo = appendVisitInfoIsRestrictedUser(b.visitInfo, b.ctx, u.User.Username, u.User.Hostname, "RESTRICTED_USER_ADMIN")
+		}
 	case *ast.GrantStmt:
 		if b.ctx.GetSessionVars().CurrentDB == "" && raw.Level.DBName == "" {
 			if raw.Level.Level == ast.GrantLevelTable {
@@ -2265,22 +2267,20 @@ func (b *PlanBuilder) buildSimple(node ast.StmtNode) (Plan, error) {
 			return nil, ErrNoDB
 		}
 	case *ast.DropUserStmt:
-		b.visitInfo = collectVisitInfoFromDropUserStmt(b.ctx, b.visitInfo, raw)
+		// The main privilege checks for DROP USER are currently performed in executor/simple.go
+		// because they use complex OR conditions (not supported by visitInfo).
+		// TODO: check if this is MySQL compatible, and can be simplified.
+		for _, user := range raw.UserList {
+			b.visitInfo = appendVisitInfoIsRestrictedUser(b.visitInfo, b.ctx, user.Username, user.Hostname, "RESTRICTED_USER_ADMIN")
+		}
+	case *ast.SetPwdStmt:
+		if raw.User != nil {
+			b.visitInfo = appendVisitInfoIsRestrictedUser(b.visitInfo, b.ctx, raw.User.Username, raw.User.Hostname, "RESTRICTED_USER_ADMIN")
+		}
 	case *ast.ShutdownStmt:
 		b.visitInfo = appendVisitInfo(b.visitInfo, mysql.ShutdownPriv, "", "", "", nil)
 	}
 	return p, nil
-}
-
-// collectVisitInfoFromDropUserStmt adds checks for RESTRICTED USERS.
-// The main privilege checks for DROP USER are currently performed in executor/simple.go
-// because they use complex OR conditions (not supported by visitInfo).
-// TODO: check if this is MySQL compatible, and can be simplified.
-func collectVisitInfoFromDropUserStmt(sctx sessionctx.Context, vi []visitInfo, stmt *ast.DropUserStmt) []visitInfo {
-	for _, user := range stmt.UserList {
-		vi = appendVisitInfoIsRestrictedUser(vi, sctx, user.Username, user.Hostname, "RESTRICTED_USER_ADMIN")
-	}
-	return vi
 }
 
 func collectVisitInfoFromRevokeStmt(sctx sessionctx.Context, vi []visitInfo, stmt *ast.RevokeStmt) []visitInfo {
@@ -2288,13 +2288,19 @@ func collectVisitInfoFromRevokeStmt(sctx sessionctx.Context, vi []visitInfo, stm
 	// and you must have the privileges that you are granting.
 	dbName := stmt.Level.DBName
 	tableName := stmt.Level.TableName
-	if dbName == "" {
+	// This supports a local revoke SELECT on tablename, but does
+	// not add dbName to the visitInfo of a *.* grant.
+	if dbName == "" && stmt.Level.Level != ast.GrantLevelGlobal {
 		dbName = sctx.GetSessionVars().CurrentDB
 	}
-	vi = appendVisitInfo(vi, mysql.GrantPriv, dbName, tableName, "", nil)
-
+	var nonDynamicPrivilege bool
 	var allPrivs []mysql.PrivilegeType
 	for _, item := range stmt.Privs {
+		if item.Priv == mysql.ExtendedPriv {
+			vi = appendDynamicVisitInfo(vi, strings.ToUpper(item.Name), true, nil) // revified in MySQL: requires the dynamic grant option to revoke.
+			continue
+		}
+		nonDynamicPrivilege = true
 		if item.Priv == mysql.AllPriv {
 			switch stmt.Level.Level {
 			case ast.GrantLevelGlobal:
@@ -2312,9 +2318,14 @@ func collectVisitInfoFromRevokeStmt(sctx sessionctx.Context, vi []visitInfo, stm
 	for _, priv := range allPrivs {
 		vi = appendVisitInfo(vi, priv, dbName, tableName, "", nil)
 	}
-	// Check if any of the users are RESTRICTED
-	for _, user := range stmt.Users {
-		vi = appendVisitInfoIsRestrictedUser(vi, sctx, user.User.Username, user.User.Hostname, "RESTRICTED_USER_ADMIN")
+	for _, u := range stmt.Users {
+		// For SEM, make sure the users are not restricted
+		vi = appendVisitInfoIsRestrictedUser(vi, sctx, u.User.Username, u.User.Hostname, "RESTRICTED_USER_ADMIN")
+	}
+	if nonDynamicPrivilege {
+		// Dynamic privileges use their own GRANT OPTION. If there were any non-dynamic privilege requests,
+		// we need to attach the "GLOBAL" version of the GRANT OPTION.
+		vi = appendVisitInfo(vi, mysql.GrantPriv, dbName, tableName, "", nil)
 	}
 	return vi
 }

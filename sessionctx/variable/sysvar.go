@@ -1210,7 +1210,7 @@ var defaultSysVars = []*SysVar{
 		s.MultiStatementMode = TiDBOptMultiStmt(val)
 		return nil
 	}},
-	{Scope: ScopeNone, Name: TiDBEnableEnhancedSecurity, Value: BoolToOnOff(config.GetGlobalConfig().Experimental.EnableEnhancedSecurity), Type: TypeBool},
+	{Scope: ScopeNone, Name: TiDBEnableEnhancedSecurity, Value: BoolOff, Type: TypeBool},
 	{Scope: ScopeGlobal | ScopeSession, Name: TiDBEnableExchangePartition, Value: BoolToOnOff(DefTiDBEnableExchangePartition), Type: TypeBool, SetSession: func(s *SessionVars, val string) error {
 		s.TiDBEnableExchangePartition = TiDBOptOn(val)
 		return nil
