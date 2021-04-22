@@ -161,6 +161,8 @@ const (
 	TableClientErrorsSummaryByUser = "CLIENT_ERRORS_SUMMARY_BY_USER"
 	// TableClientErrorsSummaryByHost is the string constant of client errors table.
 	TableClientErrorsSummaryByHost = "CLIENT_ERRORS_SUMMARY_BY_HOST"
+	// TableVariablesInfo is the string constant of variables_info table.
+	TableVariablesInfo = "VARIABLES_INFO"
 )
 
 var tableIDMap = map[string]int64{
@@ -233,6 +235,7 @@ var tableIDMap = map[string]int64{
 	TableClientErrorsSummaryGlobal:          autoid.InformationSchemaDBID + 67,
 	TableClientErrorsSummaryByUser:          autoid.InformationSchemaDBID + 68,
 	TableClientErrorsSummaryByHost:          autoid.InformationSchemaDBID + 69,
+	TableVariablesInfo:                      autoid.InformationSchemaDBID + 70,
 }
 
 type columnInfo struct {
@@ -1332,6 +1335,18 @@ var tableClientErrorsSummaryByHostCols = []columnInfo{
 	{name: "LAST_SEEN", tp: mysql.TypeTimestamp, size: 26},
 }
 
+var tableVariablesInfoCols = []columnInfo{
+	{name: "VARIABLE_NAME", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
+	{name: "CONFIGURATION_NAME", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
+	{name: "VARIABLE_SOURCE", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
+	{name: "VARIABLE_SCOPE", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
+	{name: "MIN_VALUE", tp: mysql.TypeLonglong, size: 64, flag: mysql.NotNullFlag},
+	{name: "MAX_VALUE", tp: mysql.TypeLonglong, size: 64, flag: mysql.NotNullFlag},
+	{name: "DEFAULT_VALUE", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
+	{name: "CURRENT_VALUE", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
+	{name: "IS_NOOP", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
+}
+
 // GetShardingInfo returns a nil or description string for the sharding information of given TableInfo.
 // The returned description string may be:
 //  - "NOT_SHARDED": for tables that SHARD_ROW_ID_BITS is not specified.
@@ -1701,6 +1716,7 @@ var tableNameToColumns = map[string][]columnInfo{
 	TableClientErrorsSummaryGlobal:          tableClientErrorsSummaryGlobalCols,
 	TableClientErrorsSummaryByUser:          tableClientErrorsSummaryByUserCols,
 	TableClientErrorsSummaryByHost:          tableClientErrorsSummaryByHostCols,
+	TableVariablesInfo:                      tableVariablesInfoCols,
 }
 
 func createInfoSchemaTable(_ autoid.Allocators, meta *model.TableInfo) (table.Table, error) {

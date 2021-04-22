@@ -120,6 +120,16 @@ type SysVar struct {
 	SetSession func(*SessionVars, string) error
 	// IsHintUpdatable indicate whether it's updatable via SET_VAR() hint (optional)
 	IsHintUpdatable bool
+
+	// isNoop indicates if it is from the noop list.
+	isNoop bool
+}
+
+func (sv *SysVar) IsNoop() string {
+	if sv.isNoop {
+		return "YES"
+	}
+	return "NO"
 }
 
 // SetSessionFromHook calls the SetSession func if it exists.
@@ -446,6 +456,7 @@ func init() {
 		RegisterSysVar(v)
 	}
 	for _, v := range noopSysVars {
+		v.isNoop = true
 		RegisterSysVar(v)
 	}
 	initSynonymsSysVariables()

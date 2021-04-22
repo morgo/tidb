@@ -148,6 +148,8 @@ func (e *memtableRetriever) retrieve(ctx context.Context, sctx sessionctx.Contex
 			infoschema.TableClientErrorsSummaryByUser,
 			infoschema.TableClientErrorsSummaryByHost:
 			err = e.setDataForClientErrorsSummary(sctx, e.table.Name.O)
+		case infoschema.TableVariablesInfo:
+			err = e.setDataForVariablesInfo(sctx)
 		}
 		if err != nil {
 			return nil, err
@@ -1746,6 +1748,47 @@ func (e *memtableRetriever) setDataForServersInfo() error {
 			info.GitHash,         // GIT_HASH
 			info.BinlogStatus,    // BINLOG_STATUS
 			stringutil.BuildStringFromLabels(info.Labels), // LABELS
+		)
+		rows = append(rows, row)
+	}
+	e.rows = rows
+	return nil
+}
+
+func scopeStr(scope variable.ScopeFlag) string {
+	if scope == variable.ScopeNone {
+		return "NONE"
+	}
+	var scopes []string
+	if scope&variable.ScopeGlobal == 0 {
+		scopes = append(scopes, "GLOBAL")
+	}
+	if scope&variable.ScopeSession == 0 {
+		scopes = append(scopes, "SESSION")
+	}
+	return strings.Join(scopes, ",")
+}
+
+func (e *memtableRetriever) setDataForVariablesInfo(ctx sessionctx.Context) error {
+	sysVars := variable.GetSysVars()
+	rows := make([][]types.Datum, 0, len(sysVars))
+	for _, sv := range sysVars {
+		var currentVal string
+		if sv.Scope&variable.ScopeGlobal == 0 {
+			// global only. need to handle session only vars.
+			currentVal, _ = ctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(sv.Name)
+		}
+
+		row := types.MakeDatums(
+			sv.Name,            // VARIABLE_NAME
+			"UNKNOWN",          // CONFIGURATION_NAME
+			"UNKNOWN",          // VARIABLE_SOURCE
+			scopeStr(sv.Scope), // VARIABLE_SCOPE
+			1234,               // MIN_VALUE
+			5678,               // MAX_VALUE
+			sv.Value,           // DEFAULT_VALUE
+			currentVal,         // CURRENT_VALUE
+			sv.IsNoop(),        // IS_NOOP
 		)
 		rows = append(rows, row)
 	}
