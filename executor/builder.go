@@ -1204,6 +1204,12 @@ func (b *executorBuilder) buildHashJoin(v *plannercore.PhysicalHashJoin) Executo
 	} else {
 		e.buildTypes, e.probeTypes = rightTypes, leftTypes
 	}
+	for _, key := range e.buildKeys {
+		e.buildTypes[key.Index].Flag = key.RetType.Flag
+	}
+	for _, key := range e.probeKeys {
+		e.probeTypes[key.Index].Flag = key.RetType.Flag
+	}
 	return e
 }
 
@@ -3065,13 +3071,16 @@ func (b *executorBuilder) buildIndexLookUpReader(v *plannercore.PhysicalIndexLoo
 		return ret
 	}
 
-	nextPartition := nextPartitionForIndexLookUp{exec: ret}
-	exec, err := buildPartitionTable(b, ts.Table, &v.PartitionInfo, ret, nextPartition)
+	tmp, _ := b.is.TableByID(is.Table.ID)
+	tbl := tmp.(table.PartitionedTable)
+	partitions, err := partitionPruning(b.ctx, tbl, v.PartitionInfo.PruningConds, v.PartitionInfo.PartitionNames, v.PartitionInfo.Columns, v.PartitionInfo.ColumnNames)
 	if err != nil {
 		b.err = err
 		return nil
 	}
-	return exec
+	ret.partitionTableMode = true
+	ret.prunedPartitions = partitions
+	return ret
 }
 
 func buildNoRangeIndexMergeReader(b *executorBuilder, v *plannercore.PhysicalIndexMergeReader) (*IndexMergeReaderExecutor, error) {
