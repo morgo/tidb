@@ -640,7 +640,6 @@ func (b *executorBuilder) buildPrepare(v *plannercore.Prepare) Executor {
 	base.initCap = chunk.ZeroCapacity
 	return &PrepareExec{
 		baseExecutor: base,
-		is:           b.is,
 		name:         v.Name,
 		sqlText:      v.SQLText,
 	}
@@ -1538,6 +1537,7 @@ func (b *executorBuilder) buildMemTable(v *plannercore.PhysicalMemTable) Executo
 			strings.ToLower(infoschema.ClusterTableTiDBTrx),
 			strings.ToLower(infoschema.TableDeadlocks),
 			strings.ToLower(infoschema.ClusterTableDeadlocks),
+			strings.ToLower(infoschema.TableDataLockWaits),
 			strings.ToLower(infoschema.TableVariablesInfo):
 			return &MemTableReaderExec{
 				baseExecutor: newBaseExecutor(b.ctx, v.Schema(), v.ID()),
