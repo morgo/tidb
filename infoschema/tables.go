@@ -17,7 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"sort"
@@ -31,11 +31,13 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/terror"
+
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/ddl/placement"
 	"github.com/pingcap/tidb/domain/infosync"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/meta/autoid"
+	"github.com/pingcap/tidb/session/txninfo"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/store/tikv"
@@ -161,6 +163,12 @@ const (
 	TableClientErrorsSummaryByUser = "CLIENT_ERRORS_SUMMARY_BY_USER"
 	// TableClientErrorsSummaryByHost is the string constant of client errors table.
 	TableClientErrorsSummaryByHost = "CLIENT_ERRORS_SUMMARY_BY_HOST"
+	// TableTiDBTrx is current running transaction status table.
+	TableTiDBTrx = "TIDB_TRX"
+	// TableDeadlocks is the string constatnt of deadlock table.
+	TableDeadlocks = "DEADLOCKS"
+	// TableDataLockWaits is current lock waiting status table.
+	TableDataLockWaits = "DATA_LOCK_WAITS"
 	// TableVariablesInfo is the string constant of variables_info table.
 	TableVariablesInfo = "VARIABLES_INFO"
 )
@@ -235,23 +243,29 @@ var tableIDMap = map[string]int64{
 	TableClientErrorsSummaryGlobal:          autoid.InformationSchemaDBID + 67,
 	TableClientErrorsSummaryByUser:          autoid.InformationSchemaDBID + 68,
 	TableClientErrorsSummaryByHost:          autoid.InformationSchemaDBID + 69,
-	TableVariablesInfo:                      autoid.InformationSchemaDBID + 70,
+	TableTiDBTrx:                            autoid.InformationSchemaDBID + 70,
+	ClusterTableTiDBTrx:                     autoid.InformationSchemaDBID + 71,
+	TableDeadlocks:                          autoid.InformationSchemaDBID + 72,
+	ClusterTableDeadlocks:                   autoid.InformationSchemaDBID + 73,
+	TableDataLockWaits:                      autoid.InformationSchemaDBID + 74,
+	TableVariablesInfo:                      autoid.InformationSchemaDBID + 75,
 }
 
 type columnInfo struct {
-	name    string
-	tp      byte
-	size    int
-	decimal int
-	flag    uint
-	deflt   interface{}
-	comment string
+	name      string
+	tp        byte
+	size      int
+	decimal   int
+	flag      uint
+	deflt     interface{}
+	comment   string
+	enumElems []string
 }
 
 func buildColumnInfo(col columnInfo) *model.ColumnInfo {
 	mCharset := charset.CharsetBin
 	mCollation := charset.CharsetBin
-	if col.tp == mysql.TypeVarchar || col.tp == mysql.TypeBlob || col.tp == mysql.TypeLongBlob {
+	if col.tp == mysql.TypeVarchar || col.tp == mysql.TypeBlob || col.tp == mysql.TypeLongBlob || col.tp == mysql.TypeEnum {
 		mCharset = charset.CharsetUTF8MB4
 		mCollation = charset.CollationUTF8MB4
 	}
@@ -262,6 +276,7 @@ func buildColumnInfo(col columnInfo) *model.ColumnInfo {
 		Flen:    col.size,
 		Decimal: col.decimal,
 		Flag:    col.flag,
+		Elems:   col.enumElems,
 	}
 	return &model.ColumnInfo{
 		Name:         model.NewCIStr(col.name),
@@ -1335,6 +1350,39 @@ var tableClientErrorsSummaryByHostCols = []columnInfo{
 	{name: "LAST_SEEN", tp: mysql.TypeTimestamp, size: 26},
 }
 
+var tableTiDBTrxCols = []columnInfo{
+	{name: "ID", tp: mysql.TypeLonglong, size: 21, flag: mysql.PriKeyFlag | mysql.NotNullFlag | mysql.UnsignedFlag},
+	{name: "START_TIME", tp: mysql.TypeTimestamp, decimal: 6, size: 26, comment: "Start time of the transaction"},
+	{name: "CURRENT_SQL_DIGEST", tp: mysql.TypeVarchar, size: 64, comment: "Digest of the sql the transaction are currently running"},
+	{name: "STATE", tp: mysql.TypeEnum, enumElems: txninfo.TxnRunningStateStrs, comment: "Current running state of the transaction"},
+	{name: "WAITING_START_TIME", tp: mysql.TypeTimestamp, decimal: 6, size: 26, comment: "Current lock waiting's start time"},
+	{name: "LEN", tp: mysql.TypeLonglong, size: 64, comment: "How many entries are in MemDB"},
+	{name: "SIZE", tp: mysql.TypeLonglong, size: 64, comment: "MemDB used memory"},
+	{name: "SESSION_ID", tp: mysql.TypeLonglong, size: 21, flag: mysql.UnsignedFlag, comment: "Which session this transaction belongs to"},
+	{name: "USER", tp: mysql.TypeVarchar, size: 16, comment: "The user who open this session"},
+	{name: "DB", tp: mysql.TypeVarchar, size: 64, comment: "The schema this transaction works on"},
+	{name: "ALL_SQL_DIGESTS", tp: mysql.TypeBlob, size: types.UnspecifiedLength, comment: "A list of the digests of SQL statements that the transaction has executed"},
+}
+
+var tableDeadlocksCols = []columnInfo{
+	{name: "DEADLOCK_ID", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag, comment: "The ID to distinguish different deadlock events"},
+	{name: "OCCUR_TIME", tp: mysql.TypeTimestamp, decimal: 6, size: 26, comment: "The physical time when the deadlock occurs"},
+	{name: "RETRYABLE", tp: mysql.TypeTiny, size: 1, flag: mysql.NotNullFlag, comment: "Whether the deadlock is retryable. Retryable deadlocks are usually not reported to the client"},
+	{name: "TRY_LOCK_TRX_ID", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag | mysql.UnsignedFlag, comment: "The transaction ID (start ts) of the transaction that's trying to acquire the lock"},
+	{name: "CURRENT_SQL_DIGEST", tp: mysql.TypeVarchar, size: 64, comment: "The digest of the SQL that's being blocked"},
+	{name: "KEY", tp: mysql.TypeBlob, size: types.UnspecifiedLength, comment: "The key on which a transaction is waiting for another"},
+	{name: "TRX_HOLDING_LOCK", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag | mysql.UnsignedFlag, comment: "The transaction ID (start ts) of the transaction that's currently holding the lock"},
+	// TODO: Implement the ALL_SQL_DIGESTS column
+	// {name: "ALL_SQL_DIGESTS", tp: mysql.TypeBlob, size: types.UnspecifiedLength, comment: "A list of the digests of SQL statements that the transaction has executed"},
+}
+
+var tableDataLockWaitsCols = []columnInfo{
+	{name: "KEY", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag, comment: "The key that's being waiting on"},
+	{name: "TRX_ID", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag | mysql.UnsignedFlag, comment: "Current transaction that's waiting for the lock"},
+	{name: "CURRENT_HOLDING_TRX_ID", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag | mysql.UnsignedFlag, comment: "The transaction that's holding the lock and blocks the current transaction"},
+	{name: "SQL_DIGEST", tp: mysql.TypeVarchar, size: 64, comment: "Digest of the SQL that's trying to acquire the lock"},
+}
+
 var tableVariablesInfoCols = []columnInfo{
 	{name: "VARIABLE_NAME", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
 	{name: "CONFIGURATION_NAME", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
@@ -1536,7 +1584,7 @@ func GetPDServerInfo(ctx sessionctx.Context) ([]ServerInfo, error) {
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		pdVersion, err := ioutil.ReadAll(resp.Body)
+		pdVersion, err := io.ReadAll(resp.Body)
 		terror.Log(resp.Body.Close())
 		if err != nil {
 			return nil, errors.Trace(err)
@@ -1716,6 +1764,9 @@ var tableNameToColumns = map[string][]columnInfo{
 	TableClientErrorsSummaryGlobal:          tableClientErrorsSummaryGlobalCols,
 	TableClientErrorsSummaryByUser:          tableClientErrorsSummaryByUserCols,
 	TableClientErrorsSummaryByHost:          tableClientErrorsSummaryByHostCols,
+	TableTiDBTrx:                            tableTiDBTrxCols,
+	TableDeadlocks:                          tableDeadlocksCols,
+	TableDataLockWaits:                      tableDataLockWaitsCols,
 	TableVariablesInfo:                      tableVariablesInfoCols,
 }
 
@@ -1753,7 +1804,7 @@ func (s SchemasSorter) Less(i, j int) bool {
 }
 
 func (it *infoschemaTable) getRows(ctx sessionctx.Context, cols []*table.Column) (fullRows [][]types.Datum, err error) {
-	is := GetInfoSchema(ctx)
+	is := ctx.GetInfoSchema().(InfoSchema)
 	dbs := is.AllSchemas()
 	sort.Sort(SchemasSorter(dbs))
 	switch it.meta.Name.O {
