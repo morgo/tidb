@@ -1385,13 +1385,13 @@ var tableDataLockWaitsCols = []columnInfo{
 
 var tableVariablesInfoCols = []columnInfo{
 	{name: "VARIABLE_NAME", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
-	{name: "CONFIGURATION_NAME", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
-	{name: "VARIABLE_SOURCE", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
+	{name: "TOML_NAME", tp: mysql.TypeVarchar, size: 64},
 	{name: "VARIABLE_SCOPE", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
-	{name: "MIN_VALUE", tp: mysql.TypeLonglong, size: 64, flag: mysql.NotNullFlag},
-	{name: "MAX_VALUE", tp: mysql.TypeLonglong, size: 64, flag: mysql.NotNullFlag},
 	{name: "DEFAULT_VALUE", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
 	{name: "CURRENT_VALUE", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
+	{name: "MIN_VALUE", tp: mysql.TypeLonglong, size: 64},
+	{name: "MAX_VALUE", tp: mysql.TypeLonglong, size: 64, flag: mysql.UnsignedFlag},
+	{name: "POSSIBLE_VALUES", tp: mysql.TypeVarchar, size: 256},
 	{name: "IS_NOOP", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
 }
 

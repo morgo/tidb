@@ -1622,3 +1622,15 @@ func (s *testDataLockWaitSuite) TestDataLockPrivilege(c *C) {
 	}, nil, nil), IsTrue)
 	_ = tk.MustQuery("select * from information_schema.DATA_LOCK_WAITS")
 }
+
+func (s *testDataLockWaitSuite) TestVariablesInfo(c *C) {
+	tk := s.newTestKitWithRoot(c)
+	// Test a variety of sysvar types including noop and default vars.
+	tk.MustQuery("SELECT * from information_schema.variables_info WHERE variable_name IN ('foreign_key_checks', 'sql_mode', 'default_week_format', 'max_execution_time', 'innodb_version') ORDER BY variable_name").Check(testkit.Rows(
+		"default_week_format <nil> SESSION,GLOBAL 0 0 0 7 <nil> NO",
+		"foreign_key_checks <nil> SESSION,GLOBAL OFF OFF <nil> <nil> <nil> NO",
+		"innodb_version <nil> NONE 5.6.25 5.6.25 <nil> <nil> <nil> YES",
+		"max_execution_time <nil> SESSION,GLOBAL 0 0 0 18446744073709551615 <nil> NO",
+		"sql_mode <nil> SESSION,GLOBAL ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION <nil> <nil> <nil> NO",
+	))
+}

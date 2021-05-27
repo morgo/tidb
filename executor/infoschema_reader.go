@@ -1826,16 +1826,16 @@ func (e *memtableRetriever) setDataForServersInfo(ctx sessionctx.Context) error 
 	return nil
 }
 
-func scopeStr(scope variable.ScopeFlag) string {
-	if scope == variable.ScopeNone {
+func scopeStr(sv *variable.SysVar) string {
+	var scopes []string
+	if sv.HasNoneScope() {
 		return "NONE"
 	}
-	var scopes []string
-	if scope&variable.ScopeGlobal == 0 {
-		scopes = append(scopes, "GLOBAL")
-	}
-	if scope&variable.ScopeSession == 0 {
+	if sv.HasSessionScope() {
 		scopes = append(scopes, "SESSION")
+	}
+	if sv.HasGlobalScope() {
+		scopes = append(scopes, "GLOBAL")
 	}
 	return strings.Join(scopes, ",")
 }
@@ -1844,23 +1844,36 @@ func (e *memtableRetriever) setDataForVariablesInfo(ctx sessionctx.Context) erro
 	sysVars := variable.GetSysVars()
 	rows := make([][]types.Datum, 0, len(sysVars))
 	for _, sv := range sysVars {
-		var currentVal string
-		if sv.Scope&variable.ScopeGlobal == 0 {
-			// global only. need to handle session only vars.
-			currentVal, _ = ctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(sv.Name)
+		currentVal, err := variable.GetSessionOrGlobalSystemVar(ctx.GetSessionVars(), sv.Name)
+		if err != nil {
+			currentVal = ""
 		}
-
+		isNoop := "NO"
+		if sv.IsNoop {
+			isNoop = "YES"
+		}
 		row := types.MakeDatums(
-			sv.Name,            // VARIABLE_NAME
-			"UNKNOWN",          // CONFIGURATION_NAME
-			"UNKNOWN",          // VARIABLE_SOURCE
-			scopeStr(sv.Scope), // VARIABLE_SCOPE
-			1234,               // MIN_VALUE
-			5678,               // MAX_VALUE
-			sv.Value,           // DEFAULT_VALUE
-			currentVal,         // CURRENT_VALUE
-			sv.IsNoop(),        // IS_NOOP
+			sv.Name,      // VARIABLE_NAME
+			nil,          // TOML_NAME
+			scopeStr(sv), // VARIABLE_SCOPE
+			sv.Value,     // DEFAULT_VALUE
+			currentVal,   // CURRENT_VALUE
+			sv.MinValue,  // MIN_VALUE
+			sv.MaxValue,  // MAX_VALUE
+			nil,          // POSSIBLE_VALUES
+			isNoop,       // IS_NOOP
 		)
+		if !(sv.Type == variable.TypeUnsigned || sv.Type == variable.TypeInt) {
+			row[5].SetNull()
+			row[6].SetNull()
+		}
+		if sv.Type == variable.TypeEnum {
+			possibleValues := strings.Join(sv.PossibleValues, ",")
+			row[7].SetString(possibleValues, mysql.DefaultCollationName)
+		}
+		if sv.TomlName != "" {
+			row[1].SetString(sv.TomlName, mysql.DefaultCollationName)
+		}
 		rows = append(rows, row)
 	}
 	e.rows = rows
