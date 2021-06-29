@@ -1052,12 +1052,16 @@ type LimitExec struct {
 
 	// columnIdxsUsedByChild keep column indexes of child executor used for inline projection
 	columnIdxsUsedByChild []int
+
+	// calcFoundRows indicates if we should calculate the exact row count
+	// even if a limit is applied. This is used by the feature SQL_CALC_FOUND_ROWS.
+	calcFoundRows bool
 }
 
 // Next implements the Executor Next interface.
 func (e *LimitExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	req.Reset()
-	if e.cursor >= e.end {
+	if e.cursor >= e.end && !e.calcFoundRows {
 		return nil
 	}
 	for !e.meetFirstBatch {
@@ -1104,6 +1108,12 @@ func (e *LimitExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		return nil
 	}
 	if e.cursor+batchSize > e.end {
+		if e.calcFoundRows {
+			// The rows e.end will already be accounted for
+			// so we need to add batchSize + e.cursor less e.end.
+			addRows := batchSize + e.cursor - e.end
+			e.ctx.GetSessionVars().StmtCtx.AddFoundRows(addRows)
+		}
 		e.childResult.TruncateTo(int(e.end - e.cursor))
 		batchSize = e.end - e.cursor
 	}

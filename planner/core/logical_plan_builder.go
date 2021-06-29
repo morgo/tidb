@@ -1452,7 +1452,7 @@ func (b *PlanBuilder) buildSetOpr(ctx context.Context, setOpr *ast.SetOprStmt) (
 	}
 
 	if setOpr.Limit != nil {
-		setOprPlan, err = b.buildLimit(setOprPlan, setOpr.Limit)
+		setOprPlan, err = b.buildLimit(setOprPlan, setOpr.Limit, false)
 		if err != nil {
 			return nil, err
 		}
@@ -1806,8 +1806,11 @@ func extractLimitCountOffset(ctx sessionctx.Context, limit *ast.Limit) (count ui
 	return count, offset, nil
 }
 
-func (b *PlanBuilder) buildLimit(src LogicalPlan, limit *ast.Limit) (LogicalPlan, error) {
-	b.optFlag = b.optFlag | flagPushDownTopN
+func (b *PlanBuilder) buildLimit(src LogicalPlan, limit *ast.Limit, calcFoundRows bool) (LogicalPlan, error) {
+	if !calcFoundRows {
+		// Only pushdown limit when calcFoundRows is not set.
+		b.optFlag = b.optFlag | flagPushDownTopN
+	}
 	var (
 		offset, count uint64
 		err           error
@@ -1826,8 +1829,9 @@ func (b *PlanBuilder) buildLimit(src LogicalPlan, limit *ast.Limit) (LogicalPlan
 		return tableDual, nil
 	}
 	li := LogicalLimit{
-		Offset: offset,
-		Count:  count,
+		Offset:        offset,
+		Count:         count,
+		CalcFoundRows: calcFoundRows,
 	}.Init(b.ctx, b.getSelectOffset())
 	if hint := b.TableHints(); hint != nil {
 		li.limitHints = hint.limitHints
@@ -3353,12 +3357,7 @@ func (b *PlanBuilder) buildSelect(ctx context.Context, sel *ast.SelectStmt) (p L
 			return nil, ErrCTERecursiveForbidsAggregation.FastGenByArgs(b.genCTETableNameForError())
 		}
 	}
-	enableNoopFuncs := b.ctx.GetSessionVars().EnableNoopFuncs
 	if sel.SelectStmtOpts != nil {
-		if sel.SelectStmtOpts.CalcFoundRows && !enableNoopFuncs {
-			err = expression.ErrFunctionsNoopImpl.GenWithStackByArgs("SQL_CALC_FOUND_ROWS")
-			return nil, err
-		}
 		origin := b.inStraightJoin
 		b.inStraightJoin = sel.SelectStmtOpts.StraightJoin
 		defer func() { b.inStraightJoin = origin }()
@@ -3467,6 +3466,7 @@ func (b *PlanBuilder) buildSelect(ctx context.Context, sel *ast.SelectStmt) (p L
 		}
 	}
 	if sel.LockInfo != nil && sel.LockInfo.LockType != ast.SelectLockNone {
+		enableNoopFuncs := b.ctx.GetSessionVars().EnableNoopFuncs
 		if sel.LockInfo.LockType == ast.SelectLockForShare && !enableNoopFuncs {
 			err = expression.ErrFunctionsNoopImpl.GenWithStackByArgs("LOCK IN SHARE MODE")
 			return nil, err
@@ -3572,7 +3572,7 @@ func (b *PlanBuilder) buildSelect(ctx context.Context, sel *ast.SelectStmt) (p L
 	}
 
 	if sel.Limit != nil {
-		p, err = b.buildLimit(p, sel.Limit)
+		p, err = b.buildLimit(p, sel.Limit, sel.SelectStmtOpts.CalcFoundRows)
 		if err != nil {
 			return nil, err
 		}
@@ -4490,7 +4490,7 @@ func (b *PlanBuilder) buildUpdate(ctx context.Context, update *ast.UpdateStmt) (
 		}
 	}
 	if update.Limit != nil {
-		p, err = b.buildLimit(p, update.Limit)
+		p, err = b.buildLimit(p, update.Limit, false)
 		if err != nil {
 			return nil, err
 		}
@@ -4841,7 +4841,7 @@ func (b *PlanBuilder) buildDelete(ctx context.Context, delete *ast.DeleteStmt) (
 	}
 
 	if delete.Limit != nil {
-		p, err = b.buildLimit(p, delete.Limit)
+		p, err = b.buildLimit(p, delete.Limit, false)
 		if err != nil {
 			return nil, err
 		}
@@ -6047,7 +6047,7 @@ func (b *PlanBuilder) buildRecursiveCTE(ctx context.Context, cte ast.ResultSetNo
 		cInfo.recurLP = recurPart
 		// Only need to handle limit if x is SetOprStmt.
 		if x.Limit != nil {
-			limit, err := b.buildLimit(cInfo.seedLP, x.Limit)
+			limit, err := b.buildLimit(cInfo.seedLP, x.Limit, false)
 			if err != nil {
 				return err
 			}

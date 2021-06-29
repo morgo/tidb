@@ -3347,6 +3347,18 @@ func (s *testIntegrationSuite) TestInfoBuiltin(c *C) {
 	tk.MustQuery("select * from t")
 	result = tk.MustQuery("select found_rows()")
 	result.Check(testkit.Rows("3"))
+	tk.MustQuery("select * from t LIMIT 1")
+	result = tk.MustQuery("select found_rows()")
+	result.Check(testkit.Rows("1"))
+	tk.MustQuery("select SQL_CALC_FOUND_ROWS * FROM t LIMIT 1")
+	result = tk.MustQuery("select found_rows()")
+	result.Check(testkit.Rows("3"))
+	tk.MustQuery("select SQL_CALC_FOUND_ROWS * FROM t LIMIT 3")
+	result = tk.MustQuery("select found_rows()")
+	result.Check(testkit.Rows("3"))
+	tk.MustQuery("select SQL_CALC_FOUND_ROWS * FROM t LIMIT 100")
+	result = tk.MustQuery("select found_rows()")
+	result.Check(testkit.Rows("3"))
 	tk.MustQuery("select * from t where a = 0")
 	result = tk.MustQuery("select found_rows()")
 	result.Check(testkit.Rows("0"))
@@ -7991,7 +8003,6 @@ func (s *testIntegrationSerialSuite) TestNoopFunctions(c *C) {
 
 	message := `.* has only noop implementation in tidb now, use tidb_enable_noop_functions to enable these functions`
 	stmts := []string{
-		"SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1",
 		"SELECT * FROM t1 LOCK IN SHARE MODE",
 		"SELECT * FROM t1 GROUP BY a DESC",
 		"SELECT * FROM t1 GROUP BY a ASC",
