@@ -1041,9 +1041,10 @@ func filterTemporaryTableKeys(vars *variable.SessionVars, keys []kv.Key) []kv.Ke
 type LimitExec struct {
 	baseExecutor
 
-	begin  uint64
-	end    uint64
-	cursor uint64
+	begin     uint64
+	end       uint64
+	cursor    uint64
+	totalRows uint64
 
 	// meetFirstBatch represents whether we have met the first valid Chunk from child.
 	meetFirstBatch bool
@@ -1072,8 +1073,10 @@ func (e *LimitExec) Next(ctx context.Context, req *chunk.Chunk) error {
 			return err
 		}
 		batchSize := uint64(e.childResult.NumRows())
+		e.totalRows += batchSize
 		// no more data.
 		if batchSize == 0 {
+			e.setFoundRows(0)
 			return nil
 		}
 		if newCursor := e.cursor + batchSize; newCursor >= e.begin {
@@ -1091,29 +1094,29 @@ func (e *LimitExec) Next(ctx context.Context, req *chunk.Chunk) error {
 			} else {
 				req.Append(e.childResult, int(begin), int(end))
 			}
-			return nil
+			e.setFoundRows(0)
+			return nil // don't understand
 		}
 		e.cursor += batchSize
 	}
 	e.childResult.Reset()
-	e.childResult = e.childResult.SetRequiredRows(req.RequiredRows(), e.maxChunkSize)
-	e.adjustRequiredRows(e.childResult)
+	if !e.calcFoundRows {
+		e.childResult = e.childResult.SetRequiredRows(req.RequiredRows(), e.maxChunkSize)
+		e.adjustRequiredRows(e.childResult)
+	}
 	err := Next(ctx, e.children[0], e.childResult)
 	if err != nil {
 		return err
 	}
 	batchSize := uint64(e.childResult.NumRows())
+	e.totalRows += batchSize
+
 	// no more data.
 	if batchSize == 0 {
+		e.setFoundRows(0)
 		return nil
 	}
 	if e.cursor+batchSize > e.end {
-		if e.calcFoundRows {
-			// The rows e.end will already be accounted for
-			// so we need to add batchSize + e.cursor less e.end.
-			addRows := batchSize + e.cursor - e.end
-			e.ctx.GetSessionVars().StmtCtx.AddFoundRows(addRows)
-		}
 		e.childResult.TruncateTo(int(e.end - e.cursor))
 		batchSize = e.end - e.cursor
 	}
@@ -1128,6 +1131,7 @@ func (e *LimitExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	} else {
 		req.SwapColumns(e.childResult)
 	}
+	e.setFoundRows(0)
 	return nil
 }
 
@@ -1148,6 +1152,13 @@ func (e *LimitExec) Close() error {
 	return e.baseExecutor.Close()
 }
 
+func (e *LimitExec) setFoundRows(cursorDelta uint64) {
+	e.cursor += cursorDelta
+	addRows := e.totalRows - e.cursor
+	fmt.Printf("#### adding rows to total: %d, cursor: %d\n", addRows, e.cursor)
+	e.ctx.GetSessionVars().StmtCtx.AddFoundRows(addRows)
+}
+
 func (e *LimitExec) adjustRequiredRows(chk *chunk.Chunk) *chunk.Chunk {
 	// the limit of maximum number of rows the LimitExec should read
 	limitTotal := int(e.end - e.cursor)
@@ -1164,6 +1175,56 @@ func (e *LimitExec) adjustRequiredRows(chk *chunk.Chunk) *chunk.Chunk {
 	}
 
 	return chk.SetRequiredRows(mathutil.Min(limitTotal, limitRequired), e.maxChunkSize)
+}
+
+// nextCalcFoundRows is used when SQL_CALC_FOUND_ROWS has been set. It is different
+// to the regular next() because we need to step through all of the rows to count them
+// even though they are not added to the result.
+func (e *LimitExec) nextCalcFoundRows(ctx context.Context, req *chunk.Chunk) error {
+
+	for {
+		if err := Next(ctx, e.children[0], req); err != nil {
+			return err
+		}
+		batchSize := uint64(req.NumRows())
+		if batchSize == 0 { // we are out of rows
+			return nil
+		}
+		newCursor := e.cursor + batchSize
+
+		// This IF only determines if we need to adjust the result.
+		// It doesn't change the cursor count.
+		// We only need to go through this process if the newcursor > the start point,
+		// but the end is still less than the total cursor.
+		fmt.Printf("#### cursor %d, newcursor %d\n", e.cursor, newCursor)
+
+		if newCursor >= e.begin && e.end < e.cursor {
+
+			end := batchSize
+			if newCursor > e.end {
+				end = e.end - e.cursor
+			}
+
+			begin, end := e.begin-e.cursor, batchSize
+			if begin == end {
+				break
+			}
+			if e.columnIdxsUsedByChild != nil {
+				req.Append(e.childResult.Prune(e.columnIdxsUsedByChild), int(begin), int(end))
+			} else {
+				fmt.Printf("#### begin %d, end: %d, e.begin: %d, e.end: %d\n", begin, end, e.begin, e.end)
+				req.Append(e.childResult, int(begin), int(end))
+			}
+		}
+		e.cursor = newCursor
+		e.childResult.Reset()
+	}
+
+	// Add the rows which won't be counted, which is totalRows less end-begin
+	addRows := e.cursor - (e.end - e.begin)
+	e.ctx.GetSessionVars().StmtCtx.AddFoundRows(addRows)
+	fmt.Printf("#### found %d rows, begin: %d, end: %d, adding: %d\n", e.cursor, e.begin, e.end, addRows)
+	return nil
 }
 
 func init() {
