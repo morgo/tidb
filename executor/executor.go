@@ -1022,14 +1022,14 @@ func doLockKeys(ctx context.Context, se sessionctx.Context, lockCtx *tikvstore.L
 
 func filterTemporaryTableKeys(vars *variable.SessionVars, keys []kv.Key) []kv.Key {
 	txnCtx := vars.TxnCtx
-	if txnCtx == nil || txnCtx.GlobalTemporaryTables == nil {
+	if txnCtx == nil || txnCtx.TemporaryTables == nil {
 		return keys
 	}
 
 	newKeys := keys[:0:len(keys)]
 	for _, key := range keys {
 		tblID := tablecodec.DecodeTableID(key)
-		if _, ok := txnCtx.GlobalTemporaryTables[tblID]; !ok {
+		if _, ok := txnCtx.TemporaryTables[tblID]; !ok {
 			newKeys = append(newKeys, key)
 		}
 	}
@@ -1041,10 +1041,9 @@ func filterTemporaryTableKeys(vars *variable.SessionVars, keys []kv.Key) []kv.Ke
 type LimitExec struct {
 	baseExecutor
 
-	begin     uint64
-	end       uint64
-	cursor    uint64
-	totalRows uint64
+	begin  uint64
+	end    uint64
+	cursor uint64
 
 	// meetFirstBatch represents whether we have met the first valid Chunk from child.
 	meetFirstBatch bool
@@ -1062,7 +1061,10 @@ type LimitExec struct {
 // Next implements the Executor Next interface.
 func (e *LimitExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	req.Reset()
-	if e.cursor >= e.end && !e.calcFoundRows {
+	if e.calcFoundRows {
+		return e.nextCalcFoundRows(ctx, req)
+	}
+	if e.cursor >= e.end {
 		return nil
 	}
 	for !e.meetFirstBatch {
@@ -1073,10 +1075,8 @@ func (e *LimitExec) Next(ctx context.Context, req *chunk.Chunk) error {
 			return err
 		}
 		batchSize := uint64(e.childResult.NumRows())
-		e.totalRows += batchSize
 		// no more data.
 		if batchSize == 0 {
-			e.setFoundRows(0)
 			return nil
 		}
 		if newCursor := e.cursor + batchSize; newCursor >= e.begin {
@@ -1094,26 +1094,21 @@ func (e *LimitExec) Next(ctx context.Context, req *chunk.Chunk) error {
 			} else {
 				req.Append(e.childResult, int(begin), int(end))
 			}
-			e.setFoundRows(0)
-			return nil // don't understand
+			return nil
 		}
 		e.cursor += batchSize
 	}
 	e.childResult.Reset()
-	if !e.calcFoundRows {
-		e.childResult = e.childResult.SetRequiredRows(req.RequiredRows(), e.maxChunkSize)
-		e.adjustRequiredRows(e.childResult)
-	}
+	e.childResult = e.childResult.SetRequiredRows(req.RequiredRows(), e.maxChunkSize)
+	e.adjustRequiredRows(e.childResult)
 	err := Next(ctx, e.children[0], e.childResult)
 	if err != nil {
 		return err
 	}
 	batchSize := uint64(e.childResult.NumRows())
-	e.totalRows += batchSize
 
 	// no more data.
 	if batchSize == 0 {
-		e.setFoundRows(0)
 		return nil
 	}
 	if e.cursor+batchSize > e.end {
@@ -1131,7 +1126,6 @@ func (e *LimitExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	} else {
 		req.SwapColumns(e.childResult)
 	}
-	e.setFoundRows(0)
 	return nil
 }
 
@@ -1152,13 +1146,6 @@ func (e *LimitExec) Close() error {
 	return e.baseExecutor.Close()
 }
 
-func (e *LimitExec) setFoundRows(cursorDelta uint64) {
-	e.cursor += cursorDelta
-	addRows := e.totalRows - e.cursor
-	fmt.Printf("#### adding rows to total: %d, cursor: %d\n", addRows, e.cursor)
-	e.ctx.GetSessionVars().StmtCtx.AddFoundRows(addRows)
-}
-
 func (e *LimitExec) adjustRequiredRows(chk *chunk.Chunk) *chunk.Chunk {
 	// the limit of maximum number of rows the LimitExec should read
 	limitTotal := int(e.end - e.cursor)
@@ -1177,53 +1164,69 @@ func (e *LimitExec) adjustRequiredRows(chk *chunk.Chunk) *chunk.Chunk {
 	return chk.SetRequiredRows(mathutil.Min(limitTotal, limitRequired), e.maxChunkSize)
 }
 
-// nextCalcFoundRows is used when SQL_CALC_FOUND_ROWS has been set. It is different
-// to the regular next() because we need to step through all of the rows to count them
-// even though they are not added to the result.
-func (e *LimitExec) nextCalcFoundRows(ctx context.Context, req *chunk.Chunk) error {
+func minUint64(a, b uint64) uint64 {
+	if a < b {
+		return a
+	}
+	return b
+}
 
+// nextCalcFoundRows is different from Next() because we must read through all of the rows
+// in order to calculate the total number of rows. This is part of the SQL_CALC_FOUND_ROWS feature.
+// It is typically slower than running two queries (a LIMIT and a COUNT(*) for total),
+// but is required for MySQL compatibility.
+func (e *LimitExec) nextCalcFoundRows(ctx context.Context, req *chunk.Chunk) error {
 	for {
-		if err := Next(ctx, e.children[0], req); err != nil {
+		err := Next(ctx, e.children[0], e.adjustRequiredRows(e.childResult))
+		if err != nil {
 			return err
 		}
-		batchSize := uint64(req.NumRows())
-		if batchSize == 0 { // we are out of rows
-			return nil
+		batchSize := uint64(e.childResult.NumRows())
+		// no more data.
+		if batchSize == 0 {
+			break
 		}
-		newCursor := e.cursor + batchSize
-
-		// This IF only determines if we need to adjust the result.
-		// It doesn't change the cursor count.
-		// We only need to go through this process if the newcursor > the start point,
-		// but the end is still less than the total cursor.
-		fmt.Printf("#### cursor %d, newcursor %d\n", e.cursor, newCursor)
-
-		if newCursor >= e.begin && e.end < e.cursor {
-
-			end := batchSize
-			if newCursor > e.end {
-				end = e.end - e.cursor
-			}
-
-			begin, end := e.begin-e.cursor, batchSize
-			if begin == end {
-				break
-			}
-			if e.columnIdxsUsedByChild != nil {
-				req.Append(e.childResult.Prune(e.columnIdxsUsedByChild), int(begin), int(end))
-			} else {
-				fmt.Printf("#### begin %d, end: %d, e.begin: %d, e.end: %d\n", begin, end, e.begin, e.end)
-				req.Append(e.childResult, int(begin), int(end))
-			}
+		// skip these chunks if we are not ready to read these chunks.
+		// or we already have all the data we need.
+		if e.cursor+batchSize < e.begin || e.cursor >= e.end {
+			e.cursor += batchSize
+			e.ctx.GetSessionVars().StmtCtx.AddFoundRows(batchSize)
+			continue
 		}
-		e.cursor = newCursor
-		e.childResult.Reset()
+
+		begin := uint64(0)
+		if e.begin > e.cursor {
+			// Because begin > cursor we know from the above skip that
+			// the begin will be somewhere in this batch. We need to offset
+			// the read to be begin - cursor, and then add these offset rows
+			// to the FOUND_ROWS count.
+			begin = e.begin - e.cursor
+			e.ctx.GetSessionVars().StmtCtx.AddFoundRows(begin)
+		}
+
+		// If this batch exceeds what we need, we need to truncate the end point.
+		// We then add these rows onto the found rows.
+		end := minUint64(batchSize, e.end-e.begin-e.cursor+begin)
+		if end < batchSize {
+			e.ctx.GetSessionVars().StmtCtx.AddFoundRows(batchSize - end)
+		}
+
+		// skip these chunks since we are not interested in the data.
+		if begin == end {
+			e.cursor += batchSize
+			e.ctx.GetSessionVars().StmtCtx.AddFoundRows(batchSize)
+			continue
+		}
+		if e.columnIdxsUsedByChild != nil {
+			req.Append(e.childResult.Prune(e.columnIdxsUsedByChild), int(begin), int(end))
+		} else {
+			req.Append(e.childResult, int(begin), int(end))
+		}
+
+		// Add all these rows to the cursor
+		e.cursor += batchSize
+
 	}
-
-	// Add the rows which won't be counted, which is totalRows less end-begin
-	addRows := e.cursor - (e.end - e.begin)
-	e.ctx.GetSessionVars().StmtCtx.AddFoundRows(addRows)
-	fmt.Printf("#### found %d rows, begin: %d, end: %d, adding: %d\n", e.cursor, e.begin, e.end, addRows)
 	return nil
 }
 
@@ -1733,6 +1736,7 @@ func ResetContextOfStmt(ctx sessionctx.Context, s ast.StmtNode) (err error) {
 		DiskTracker:   disk.NewTracker(memory.LabelForSQLText, -1),
 		TaskID:        stmtctx.AllocateTaskID(),
 		CTEStorageMap: map[int]*CTEStorages{},
+		IsStaleness:   false,
 	}
 	sc.MemTracker.AttachToGlobalTracker(GlobalMemoryUsageTracker)
 	globalConfig := config.GetGlobalConfig()
@@ -1772,7 +1776,7 @@ func ResetContextOfStmt(ctx sessionctx.Context, s ast.StmtNode) (err error) {
 	sc.OriginalSQL = s.Text()
 	if explainStmt, ok := s.(*ast.ExplainStmt); ok {
 		sc.InExplainStmt = true
-		sc.IgnoreExplainIDSuffix = (strings.ToLower(explainStmt.Format) == ast.ExplainFormatBrief)
+		sc.IgnoreExplainIDSuffix = (strings.ToLower(explainStmt.Format) == types.ExplainFormatBrief)
 		s = explainStmt.Stmt
 	}
 	if _, ok := s.(*ast.ExplainForStmt); ok {
