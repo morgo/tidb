@@ -22,6 +22,7 @@ import (
 
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/variable"
+	"github.com/pingcap/tidb/util/bgtask"
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/sqlexec"
 	"github.com/pingcap/tidb/util/stmtsummary"
@@ -121,8 +122,10 @@ func (svc *SysVarCache) RebuildSysVarCache(ctx sessionctx.Context) error {
 	// where an earlier fetchTableValues() finishes last.
 	svc.rebuildLock.Lock()
 	defer svc.rebuildLock.Unlock()
+	bgtask.Start("rebuild_sysvar_cache")
 	tableContents, err := svc.fetchTableValues(ctx)
 	if err != nil {
+		bgtask.Finish("rebuild_sysvar_cache", err)
 		return err
 	}
 
@@ -149,6 +152,7 @@ func (svc *SysVarCache) RebuildSysVarCache(ctx sessionctx.Context) error {
 	defer svc.Unlock()
 	svc.session = newSessionCache
 	svc.global = newGlobalCache
+	bgtask.Finish("rebuild_sysvar_cache", nil)
 	return nil
 }
 

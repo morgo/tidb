@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util"
+	"github.com/pingcap/tidb/util/bgtask"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/hack"
 	"github.com/pingcap/tidb/util/logutil"
@@ -1516,12 +1517,15 @@ func (h *Handle) Get() *MySQLPrivilege {
 
 // Update loads all the privilege info from kv storage.
 func (h *Handle) Update(ctx sessionctx.Context) error {
+	bgtask.Start("reload_privileges")
 	var priv MySQLPrivilege
 	err := priv.LoadAll(ctx)
 	if err != nil {
+		bgtask.Finish("reload_privileges", err)
 		return err
 	}
 
 	h.priv.Store(&priv)
+	bgtask.Finish("reload_privileges", nil)
 	return nil
 }

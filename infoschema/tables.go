@@ -177,6 +177,8 @@ const (
 	TableDataLockWaits = "DATA_LOCK_WAITS"
 	// TableRegionLabel is the string constant of region label table.
 	TableRegionLabel = "REGION_LABEL"
+	// TableBackgroundTasks is the string constant for background tasks table.
+	TableBackgroundTasks = "BACKGROUND_TASKS"
 )
 
 const (
@@ -272,6 +274,7 @@ var tableIDMap = map[string]int64{
 	TableStatementsSummaryEvicted:           autoid.InformationSchemaDBID + 75,
 	ClusterTableStatementsSummaryEvicted:    autoid.InformationSchemaDBID + 76,
 	TableRegionLabel:                        autoid.InformationSchemaDBID + 77,
+	TableBackgroundTasks:                    autoid.InformationSchemaDBID + 78,
 }
 
 type columnInfo struct {
@@ -1429,6 +1432,20 @@ var tableRegionLabelCols = []columnInfo{
 	{name: "END_KEY", tp: mysql.TypeBlob, size: types.UnspecifiedLength},
 }
 
+var tableBackgroundTasksCols = []columnInfo{
+	{name: "NAME", tp: mysql.TypeVarchar, size: types.UnspecifiedLength, flag: mysql.NotNullFlag},
+	{name: "LAST_STARTED_AT", tp: mysql.TypeTimestamp, size: 26, decimal: 6, flag: mysql.NotNullFlag},
+	{name: "LAST_FINISHED_AT", tp: mysql.TypeTimestamp, size: 26, decimal: 6}, // could be null if the task is in progress
+	{name: "LAST_ERROR", tp: mysql.TypeVarchar, size: 255},                    // null if in progress, or finished clean.
+	{name: "LAST_ERROR_AT", tp: mysql.TypeTimestamp, size: 26, decimal: 6},    // could be null if no errors
+	{name: "EXEC_COUNT", tp: mysql.TypeLonglong, size: 64, flag: mysql.NotNullFlag},
+	{name: "SUM_ERRORS", tp: mysql.TypeLonglong, size: 64, flag: mysql.NotNullFlag},
+	{name: "SUM_LATENCY", tp: mysql.TypeLonglong, size: 64, flag: mysql.NotNullFlag},
+	{name: "MAX_LATENCY", tp: mysql.TypeLonglong, size: 64, flag: mysql.NotNullFlag},
+	{name: "MIN_LATENCY", tp: mysql.TypeLonglong, size: 64, flag: mysql.NotNullFlag},
+	{name: "AVG_LATENCY", tp: mysql.TypeLonglong, size: 64, flag: mysql.NotNullFlag},
+}
+
 // GetShardingInfo returns a nil or description string for the sharding information of given TableInfo.
 // The returned description string may be:
 //  - "NOT_SHARDED": for tables that SHARD_ROW_ID_BITS is not specified.
@@ -1812,6 +1829,7 @@ var tableNameToColumns = map[string][]columnInfo{
 	TableDeadlocks:                          tableDeadlocksCols,
 	TableDataLockWaits:                      tableDataLockWaitsCols,
 	TableRegionLabel:                        tableRegionLabelCols,
+	TableBackgroundTasks:                    tableBackgroundTasksCols,
 }
 
 func createInfoSchemaTable(_ autoid.Allocators, meta *model.TableInfo) (table.Table, error) {

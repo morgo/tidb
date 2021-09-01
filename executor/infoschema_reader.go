@@ -57,6 +57,7 @@ import (
 	"github.com/pingcap/tidb/types"
 	binaryJson "github.com/pingcap/tidb/types/json"
 	"github.com/pingcap/tidb/util"
+	"github.com/pingcap/tidb/util/bgtask"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/collate"
 	"github.com/pingcap/tidb/util/deadlockhistory"
@@ -166,6 +167,8 @@ func (e *memtableRetriever) retrieve(ctx context.Context, sctx sessionctx.Contex
 			err = e.setDataForClientErrorsSummary(sctx, e.table.Name.O)
 		case infoschema.TableRegionLabel:
 			err = e.setDataForRegionLabel(sctx)
+		case infoschema.TableBackgroundTasks:
+			err = e.setDataForBackgroundTasks(sctx)
 		}
 		if err != nil {
 			return nil, err
@@ -2013,6 +2016,47 @@ func (e *memtableRetriever) setDataForPlacementPolicy(ctx sessionctx.Context) er
 			)
 			rows = append(rows, row)
 		}
+	}
+	e.rows = rows
+	return nil
+}
+
+func (e *memtableRetriever) setDataForBackgroundTasks(ctx sessionctx.Context) error {
+	if !hasPriv(ctx, mysql.ProcessPriv) {
+		return plannercore.ErrSpecificAccessDenied.GenWithStackByArgs("PROCESS")
+	}
+	var rows [][]types.Datum
+	for _, s := range bgtask.Stats() {
+		lastStartTime := types.NewTime(types.FromGoTime(s.LastStartTime), mysql.TypeTimestamp, types.MaxFsp)
+		lastFinishTime := types.NewTime(types.FromGoTime(s.LastFinishTime), mysql.TypeTimestamp, types.MaxFsp)
+		lastErrorAt := types.NewTime(types.FromGoTime(s.LastErrorTime), mysql.TypeTimestamp, types.MaxFsp)
+		avgLatency := s.SumLatency // prevent divide by zero
+		if s.ExecCount > 0 {
+			avgLatency = s.SumLatency / s.ExecCount
+		}
+		row := types.MakeDatums(
+			s.TaskName,                     // NAME
+			lastStartTime,                  // LAST_STARTED_AT
+			lastFinishTime,                 // LAST_FINISH_TIME
+			fmt.Sprintf("%s", s.LastError), // LAST_ERROR
+			lastErrorAt,                    // LAST_ERROR_TIME
+			s.ExecCount,                    // EXEC_COUNT
+			s.SumErrors,                    // SUM_ERRORS,
+			s.SumLatency,                   // SUM_LATENCY
+			s.MaxLatency,                   // MAX_LATENCY
+			s.MinLatency,                   // MIN_LATENCY,
+			avgLatency,                     // AVG_LATENCY
+		)
+		if s.LastFinishTime.IsZero() {
+			row[2].SetNull()
+		}
+		if s.LastError == nil {
+			row[3].SetNull()
+		}
+		if s.LastErrorTime.IsZero() {
+			row[4].SetNull()
+		}
+		rows = append(rows, row)
 	}
 	e.rows = rows
 	return nil

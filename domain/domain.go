@@ -50,6 +50,7 @@ import (
 	"github.com/pingcap/tidb/statistics/handle"
 	"github.com/pingcap/tidb/telemetry"
 	"github.com/pingcap/tidb/util"
+	"github.com/pingcap/tidb/util/bgtask"
 	"github.com/pingcap/tidb/util/dbterror"
 	"github.com/pingcap/tidb/util/domainutil"
 	"github.com/pingcap/tidb/util/expensivequery"
@@ -340,8 +341,10 @@ func (do *Domain) Reload() error {
 	defer do.m.Unlock()
 
 	startTime := time.Now()
+	bgtask.Start("reload_infoschema")
 	ver, err := do.store.CurrentVersion(kv.GlobalTxnScope)
 	if err != nil {
+		bgtask.Finish("reload_infoschema", err)
 		return err
 	}
 
@@ -349,6 +352,7 @@ func (do *Domain) Reload() error {
 	metrics.LoadSchemaDuration.Observe(time.Since(startTime).Seconds())
 	if err != nil {
 		metrics.LoadSchemaCounter.WithLabelValues("failed").Inc()
+		bgtask.Finish("reload_infoschema", err)
 		return err
 	}
 	metrics.LoadSchemaCounter.WithLabelValues("succ").Inc()
@@ -383,7 +387,7 @@ func (do *Domain) Reload() error {
 	if sub > (lease/2) && lease > 0 {
 		logutil.BgLogger().Warn("loading schema takes a long time", zap.Duration("take time", sub))
 	}
-
+	bgtask.Finish("reload_infoschema", nil)
 	return nil
 }
 
@@ -1067,10 +1071,12 @@ func (do *Domain) handleEvolvePlanTasksLoop(ctx sessionctx.Context, owner owner.
 // in BootstrapSession.
 func (do *Domain) TelemetryReportLoop(ctx sessionctx.Context) {
 	ctx.GetSessionVars().InRestrictedSQL = true
+	bgtask.Start("telemetry_initial_run")
 	err := telemetry.InitialRun(ctx, do.GetEtcdClient())
 	if err != nil {
 		logutil.BgLogger().Warn("Initial telemetry run failed", zap.Error(err))
 	}
+	bgtask.Finish("telemetry_initial_run", err)
 
 	do.wg.Add(1)
 	go func() {
@@ -1089,11 +1095,13 @@ func (do *Domain) TelemetryReportLoop(ctx sessionctx.Context) {
 				if !owner.IsOwner() {
 					continue
 				}
+				bgtask.Start("telemetry_report_usage_data")
 				err := telemetry.ReportUsageData(ctx, do.GetEtcdClient())
 				if err != nil {
 					// Only status update errors will be printed out
 					logutil.BgLogger().Warn("TelemetryReportLoop status update failed", zap.Error(err))
 				}
+				bgtask.Finish("telemetry_report_usage_data", err)
 			}
 		}
 	}()
@@ -1215,6 +1223,7 @@ func (do *Domain) loadStatsWorker() {
 		logutil.BgLogger().Info("loadStatsWorker exited.")
 	}()
 	statsHandle := do.StatsHandle()
+	bgtask.Start("stats_init")
 	t := time.Now()
 	err := statsHandle.InitStats(do.InfoSchema())
 	if err != nil {
@@ -1222,21 +1231,28 @@ func (do *Domain) loadStatsWorker() {
 	} else {
 		logutil.BgLogger().Info("init stats info time", zap.Duration("take time", time.Since(t)))
 	}
+	bgtask.Finish("stats_init", err)
 	for {
 		select {
 		case <-loadTicker.C:
+			bgtask.Start("stats_refresh_vars")
 			err = statsHandle.RefreshVars()
 			if err != nil {
 				logutil.BgLogger().Debug("refresh variables failed", zap.Error(err))
 			}
+			bgtask.Finish("stats_refresh_vars", err)
+			bgtask.Start("stats_update")
 			err = statsHandle.Update(do.InfoSchema())
 			if err != nil {
 				logutil.BgLogger().Debug("update stats info failed", zap.Error(err))
 			}
+			bgtask.Finish("stats_update", err)
+			bgtask.Start("stats_load_needed_histograms")
 			err = statsHandle.LoadNeededHistograms()
 			if err != nil {
 				logutil.BgLogger().Debug("load histograms failed", zap.Error(err))
 			}
+			bgtask.Finish("stats_load_needed_histograms", err)
 		case <-do.exit:
 			return
 		}
