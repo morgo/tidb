@@ -34,6 +34,7 @@ import (
 // the reference count reaches zero.
 
 type advisoryLock struct {
+	ctx            context.Context
 	session        *session
 	referenceCount int
 }
@@ -56,7 +57,7 @@ func (a *advisoryLock) ReferenceCount() int {
 // Close releases the advisory lock, which includes
 // rolling back the transaction and closing the session.
 func (a *advisoryLock) Close() {
-	_, err := a.session.ExecuteInternal(context.Background(), "ROLLBACK")
+	_, err := a.session.ExecuteInternal(a.ctx, "ROLLBACK")
 	terror.Log(err)
 	a.session.Close()
 }
@@ -66,15 +67,15 @@ func (a *advisoryLock) Close() {
 // We will never COMMIT the transaction, but the err indicates
 // if the lock was successfully acquired.
 func (a *advisoryLock) GetLock(lockName string, timeout int64) error {
-	_, err := a.session.ExecuteInternal(context.Background(), "SET innodb_lock_wait_timeout = %?", timeout)
+	_, err := a.session.ExecuteInternal(a.ctx, "SET innodb_lock_wait_timeout = %?", timeout)
 	if err != nil {
 		return err
 	}
-	_, err = a.session.ExecuteInternal(context.Background(), "BEGIN PESSIMISTIC")
+	_, err = a.session.ExecuteInternal(a.ctx, "BEGIN PESSIMISTIC")
 	if err != nil {
 		return err
 	}
-	_, err = a.session.ExecuteInternal(context.Background(), "INSERT INTO mysql.advisory_locks (lock_name) VALUES (%?)", lockName)
+	_, err = a.session.ExecuteInternal(a.ctx, "INSERT INTO mysql.advisory_locks (lock_name) VALUES (%?)", lockName)
 	if err != nil {
 		// We couldn't acquire the LOCK so we close the session cleanly
 		// and return the error to the caller. The caller will need to interpret

@@ -1656,7 +1656,7 @@ func (s *session) GetAdvisoryLock(lockName string, timeout int64) error {
 	if err != nil {
 		return err
 	}
-	lock := &advisoryLock{session: sess}
+	lock := &advisoryLock{session: sess, ctx: context.TODO()}
 	err = lock.GetLock(lockName, timeout)
 	if err != nil {
 		return err

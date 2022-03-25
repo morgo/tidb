@@ -399,7 +399,7 @@ const (
 
 	// CreateAdvisoryLocks stores the advisory locks (get_lock, release_lock).
 	CreateAdvisoryLocks = `CREATE TABLE IF NOT EXISTS mysql.advisory_locks (
-		lock_name VARCHAR(255) NOT NULL PRIMARY KEY
+		lock_name VARCHAR(64) NOT NULL PRIMARY KEY
 	);`
 )
 
@@ -596,7 +596,7 @@ const (
 
 // currentBootstrapVersion is defined as a variable, so we can modify its value for testing.
 // please make sure this is the largest version
-var currentBootstrapVersion int64 = version86
+var currentBootstrapVersion int64 = version87
 
 var (
 	bootstrapVersion = []func(Session, int64){
