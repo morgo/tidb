@@ -194,24 +194,36 @@ func (b *builtinLockSig) evalInt(row chunk.Row) (int64, bool, error) {
 	if err != nil {
 		return 0, isNull, err
 	}
+	// Validate that lockName is NOT NULL or empty string
+	if isNull {
+		return 0, false, errUserLockWrongName.GenWithStackByArgs("NULL")
+	}
+	if lockName == "" || len(lockName) > 64 {
+		return 0, false, errUserLockWrongName.GenWithStackByArgs(lockName)
+	}
+	maxTimeout := int64(variable.GetSysVar("innodb_lock_wait_timeout").MaxValue)
 	timeout, isNullTimeout, err := b.args[1].EvalInt(b.ctx, row)
 	if err != nil {
 		return 0, isNull, err
 	}
-	// Validate that neither argument is NULL and there is a lockName
-	if isNull || isNullTimeout || lockName == "" {
-		return 0, false, errIncorrectArgs.GenWithStackByArgs("get_lock")
+	if isNullTimeout {
+		timeout = maxTimeout
 	}
 	// A timeout less than zero is expected to be treated as unlimited.
 	// Because of our implementation being based on pessimistic locks,
 	// We can't have a timeout greater than innodb_lock_wait_timeout.
-	maxTimeout := int64(variable.GetSysVar("innodb_lock_wait_timeout").MaxValue)
+	// So users are aware, we also attach a warning.
 	if timeout < 0 || timeout > maxTimeout {
+		err := errTruncatedWrongValue.GenWithStackByArgs("get_lock", timeout)
+		b.ctx.GetSessionVars().StmtCtx.AppendWarning(err)
 		timeout = maxTimeout
 	}
 	// Lock names are case insensitive. Because we can't rely on collations
 	// being enabled on the internal table, we have to lower it.
 	lockName = strings.ToLower(lockName)
+	if len(lockName) > 64 {
+		return 0, false, errIncorrectArgs.GenWithStackByArgs("get_lock")
+	}
 	err = b.ctx.GetAdvisoryLock(lockName, timeout)
 	if err != nil {
 		switch err.(*terror.Error).Code() {

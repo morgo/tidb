@@ -1049,6 +1049,7 @@ var MySQLErrName = map[uint16]*mysql.ErrMessage{
 	ErrTableOptionUnionUnsupported:         mysql.Message("CREATE/ALTER table with union option is not supported", nil),
 	ErrTableOptionInsertMethodUnsupported:  mysql.Message("CREATE/ALTER table with insert method option is not supported", nil),
 	ErrUserLockDeadlock:                    mysql.Message("Deadlock found when trying to get user-level lock; try rolling back transaction/releasing locks and restarting lock acquisition.", nil),
+	ErrUserLockWrongName:                   mysql.Message("Incorrect user-level lock name '%s'.", nil),
 
 	ErrBRIEBackupFailed:  mysql.Message("Backup failed: %s", nil),
 	ErrBRIERestoreFailed: mysql.Message("Restore failed: %s", nil),

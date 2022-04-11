@@ -249,6 +249,76 @@ func TestBuiltinFuncJsonPretty(t *testing.T) {
 	require.Equal(t, errors.ErrCode(mysql.ErrInvalidJSONText), terr.Code())
 }
 
+func TestGetLock(t *testing.T) {
+	store, clean := testkit.CreateMockStore(t)
+	defer clean()
+
+	tk := testkit.NewTestKit(t, store)
+
+	// No timeout specified
+	// ERROR 1582 (42000): Incorrect parameter count in the call to native function 'get_lock'
+	err := tk.ExecToErr("SELECT get_lock('testlock')")
+	require.Error(t, err)
+	terr := errors.Cause(err).(*terror.Error)
+	require.Equal(t, errors.ErrCode(mysql.ErrWrongParamcountToNativeFct), terr.Code())
+
+	// 0 timeout = immediate
+	// Negative timeout = convert to max value
+	tk.MustQuery("SELECT get_lock('testlock1', 0)").Check(testkit.Rows("1"))
+	tk.MustQuery("SELECT get_lock('testlock2', -10)").Check(testkit.Rows("1"))
+	tk.MustQuery("SELECT release_lock('testlock1'), release_lock('testlock2')").Check(testkit.Rows("1 1"))
+
+	// GetLock with NULL name
+	// ERROR 3057 (42000): Incorrect user-level lock name 'NULL'.
+	_, err = tk.Exec("SELECT get_lock('', 10)")
+	require.Error(t, err)
+	terr = errors.Cause(err).(*terror.Error)
+	require.Equal(t, errors.ErrCode(mysql.ErrWrongParamcountToNativeFct), terr.Code())
+
+	// NULL timeout is fine.
+	// TODO: what is the behavior of NULL, is it unlimited?
+	tk.MustQuery("SELECT get_lock('aaa', NULL)").Check(testkit.Rows("1"))
+	tk.MustQuery("SELECT release_lock('aaa')").Check(testkit.Rows("1"))
+
+	// GetLock in CAPS, release lock in lower.
+	tk.MustQuery("SELECT get_lock('ABC', -10)").Check(testkit.Rows("1"))
+	tk.MustQuery("SELECT release_lock('abc')").Check(testkit.Rows("1"))
+
+	// Release unacquired LOCK and previously released lock
+	tk.MustQuery("SELECT release_lock('randombytes')").Check(testkit.Rows("0"))
+	tk.MustQuery("SELECT release_lock('abc')").Check(testkit.Rows("0"))
+
+	// GetLock with integer name, 64, character name.
+	_ = tk.MustQuery("SELECT get_lock(1234, 10)")
+	_ = tk.MustQuery("SELECT get_lock(REPEAT('a', 64), 10)")
+	_ = tk.MustQuery("SELECT release_lock(1234), release_lock(REPEAT('aa', 32))")
+
+	// 65 character name
+	// ERROR 3057 (42000): Incorrect user-level lock name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'.
+	/*
+		err = tk.ExecToErr("SELECT get_lock(REPEAT('a', 65), 10)")
+		require.Error(t, err)
+		terr = errors.Cause(err).(*terror.Error)
+		require.Equal(t, errors.ErrCode(mysql.ErrWrongParamcountToNativeFct), terr.Code())
+	*/
+
+	// FLoating point timeout.
+	tk.MustQuery("SELECT get_lock('nnn', 1.2)").Check(testkit.Rows("1"))
+	tk.MustQuery("SELECT release_lock('nnn')").Check(testkit.Rows("1"))
+
+	// Multiple locks acquired in one statement.
+	// Release all locks and one not held lock
+	tk.MustQuery("SELECT get_lock('a1', 1.2), get_lock('a2', 1.2), get_lock('a3', 1.2), get_lock('a4', 1.2)").Check(testkit.Rows("1 1 1 1"))
+	tk.MustQuery("SELECT release_lock('a1'),release_lock('a2'),release_lock('a3'), release_lock('random'), release_lock('a4')").Check(testkit.Rows("1 1 1 0 1"))
+
+	// Test common cases:
+	// Get a lock, release it immediately.
+	// Get a lock, acquire it again, release it twice.
+
+	// Test someone else has the lock with 1s timeout.
+
+}
+
 func TestMiscellaneousBuiltin(t *testing.T) {
 	ctx := context.Background()
 	store, clean := testkit.CreateMockStore(t)
