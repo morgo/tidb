@@ -467,6 +467,8 @@ func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool
 	full                       "FULL"
 	function                   "FUNCTION"
 	general                    "GENERAL"
+	geometry                   "GEOMETRY"
+	geometryCollection         "GEOMETRYCOLLECTION"
 	global                     "GLOBAL"
 	grants                     "GRANTS"
 	handler                    "HANDLER"
@@ -502,6 +504,7 @@ func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool
 	lastBackup                 "LAST_BACKUP"
 	less                       "LESS"
 	level                      "LEVEL"
+	lineString                 "LINESTRING"
 	list                       "LIST"
 	loadStats                  "LOAD_STATS"
 	local                      "LOCAL"
@@ -529,6 +532,9 @@ func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool
 	modify                     "MODIFY"
 	monitor                    "MONITOR"
 	month                      "MONTH"
+	multiLineString            "MULTILINESTRING"
+	multiPoint                 "MULTIPOINT"
+	multiPolygon               "MULTIPOLYGON"
 	names                      "NAMES"
 	national                   "NATIONAL"
 	ncharType                  "NCHAR"
@@ -575,6 +581,7 @@ func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool
 	plugins                    "PLUGINS"
 	point                      "POINT"
 	policy                     "POLICY"
+	polygon                    "POLYGON"
 	preceding                  "PRECEDING"
 	prepare                    "PREPARE"
 	preserve                   "PRESERVE"
@@ -661,6 +668,7 @@ func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool
 	sqlTsiSecond               "SQL_TSI_SECOND"
 	sqlTsiWeek                 "SQL_TSI_WEEK"
 	sqlTsiYear                 "SQL_TSI_YEAR"
+	srid                       "SRID"
 	start                      "START"
 	statsAutoRecalc            "STATS_AUTO_RECALC"
 	statsColChoice             "STATS_COL_CHOICE"
@@ -4060,6 +4068,16 @@ ColumnOption:
 			Tp:       ast.ColumnOptionSecondaryEngineAttribute,
 			StrValue: $3,
 		}
+	}
+|	"SRID" NUM
+	{
+		srid := getUint64FromNUM($2)
+		// MySQL limits the SRID range to MaxUint32
+		if srid > 4294967295 {
+			yylex.AppendError(ErrDataOutOfRange.GenWithStackByArgs("SRID","SRID"))
+			return 1
+		}
+		$$ = &ast.ColumnOption{Tp: ast.ColumnOptionSrid, Srid: uint32(srid)}
 	}
 
 AutoRandomOpt:
@@ -7625,6 +7643,14 @@ UnReservedKeyword:
 |	"PAGE_COMPRESSION_LEVEL"
 |	"TRANSACTIONAL"
 |	"IETF_QUOTES"
+|	"GEOMETRY"
+|	"GEOMETRYCOLLECTION"
+|	"LINESTRING"
+|	"MULTILINESTRING"
+|	"MULTIPOINT"
+|	"MULTIPOLYGON"
+|	"POLYGON"
+|	"SRID"
 
 TiDBKeyword:
 	"ADMIN"
@@ -13911,6 +13937,78 @@ StringType:
 		tp.SetCollate(charset.CollationBin)
 		$$ = tp
 	}
+|	"GEOMETRY"
+	{
+		tp := types.NewFieldType(mysql.TypeGeometry)
+		tp.SetGeometryType(types.GeomGeometry)
+		tp.AddFlag(mysql.BinaryFlag)
+		tp.SetCharset(charset.CharsetBin)
+		tp.SetCollate(charset.CollationBin)
+		$$ = tp
+	}
+|	"GEOMETRYCOLLECTION"
+	{
+		tp := types.NewFieldType(mysql.TypeGeometry)
+		tp.SetGeometryType(types.GeomGeometryCollection)
+		tp.AddFlag(mysql.BinaryFlag)
+		tp.SetCharset(charset.CharsetBin)
+		tp.SetCollate(charset.CollationBin)
+		$$ = tp
+	}
+|	"LINESTRING"
+	{
+		tp := types.NewFieldType(mysql.TypeGeometry)
+		tp.SetGeometryType(types.GeomLineString)
+		tp.AddFlag(mysql.BinaryFlag)
+		tp.SetCharset(charset.CharsetBin)
+		tp.SetCollate(charset.CollationBin)
+		$$ = tp
+	}
+|	"MULTILINESTRING"
+	{
+		tp := types.NewFieldType(mysql.TypeGeometry)
+		tp.SetGeometryType(types.GeomMultiLineString)
+		tp.AddFlag(mysql.BinaryFlag)
+		tp.SetCharset(charset.CharsetBin)
+		tp.SetCollate(charset.CollationBin)
+		$$ = tp
+	}
+|	"MULTIPOINT"
+	{
+		tp := types.NewFieldType(mysql.TypeGeometry)
+		tp.SetGeometryType(types.GeomMultiPoint)
+		tp.AddFlag(mysql.BinaryFlag)
+		tp.SetCharset(charset.CharsetBin)
+		tp.SetCollate(charset.CollationBin)
+		$$ = tp
+	}
+|	"MULTIPOLYGON"
+	{
+		tp := types.NewFieldType(mysql.TypeGeometry)
+		tp.SetGeometryType(types.GeomMultiPolygon)
+		tp.AddFlag(mysql.BinaryFlag)
+		tp.SetCharset(charset.CharsetBin)
+		tp.SetCollate(charset.CollationBin)
+		$$ = tp
+	}
+|	"POINT"
+	{
+		tp := types.NewFieldType(mysql.TypeGeometry)
+		tp.SetGeometryType(types.GeomPoint)
+		tp.AddFlag(mysql.BinaryFlag)
+		tp.SetCharset(charset.CharsetBin)
+		tp.SetCollate(charset.CollationBin)
+		$$ = tp
+	}
+|	"POLYGON"
+	{
+		tp := types.NewFieldType(mysql.TypeGeometry)
+		tp.SetGeometryType(types.GeomPolygon)
+		tp.AddFlag(mysql.BinaryFlag)
+		tp.SetCharset(charset.CharsetBin)
+		tp.SetCollate(charset.CollationBin)
+		$$ = tp
+	}
 
 Char:
 	"CHARACTER"
@@ -16229,14 +16327,14 @@ CreateMaskingPolicyStmt:
 		}
 		state := $15.(*ast.MaskingPolicyState)
 		$$ = &ast.CreateMaskingPolicyStmt{
-			OrReplace:           $2.(bool),
-			IfNotExists:         $5.(bool),
-			PolicyName:          ast.NewCIStr($6),
-			Table:               $8.(*ast.TableName),
-			Column:              &ast.ColumnName{Name: ast.NewCIStr($10)},
-			Expr:                $13,
-			RestrictOps:         $14.(ast.MaskingPolicyRestrictOps),
-			MaskingPolicyState:  *state,
+			OrReplace:          $2.(bool),
+			IfNotExists:        $5.(bool),
+			PolicyName:         ast.NewCIStr($6),
+			Table:              $8.(*ast.TableName),
+			Column:             &ast.ColumnName{Name: ast.NewCIStr($10)},
+			Expr:               $13,
+			RestrictOps:        $14.(ast.MaskingPolicyRestrictOps),
+			MaskingPolicyState: *state,
 		}
 	}
 
